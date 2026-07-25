@@ -92,5 +92,3 @@ pip install -e .
 ## License
 
 MIT License.
-
-I recommend keeping the README intentionally short until the first working version exists. As Scrut gains features, you can expand it with installation instructions, architecture, examples, benchmarks, and contribution guidelines.
