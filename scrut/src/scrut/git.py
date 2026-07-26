@@ -50,4 +50,7 @@ reviewable_files = get_reviewable_files(changed_files)
 source_code = read_file(reviewable_files[0])
 
 parsed = ast.parse(source_code)
-print(parsed)
+
+for node in ast.walk(parsed):
+    if isinstance(node, ast.FunctionDef):
+        print(node.name)
