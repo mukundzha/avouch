@@ -1,6 +1,7 @@
 import subprocess
 import ast
 
+
 def is_gitrepo():
     result = subprocess.run(
         ["git", "rev-parse", "--is-inside-work-tree"],
@@ -21,7 +22,7 @@ def get_changed_files():
         text=True
     )
 
-    print("\nChanged Files:\n" + result.stdout)
+    print("\nChanged File(s):\n" + result.stdout)
     return result.stdout.splitlines()
 
 
@@ -32,7 +33,7 @@ def get_reviewable_files(files):
         if file.endswith(".py"):
             reviewable.append(file)
 
-    print(reviewable)
+    print("Reviewable File(s):" , reviewable)
     return reviewable
 
 
@@ -53,4 +54,10 @@ parsed = ast.parse(source_code)
 
 for node in ast.walk(parsed):
     if isinstance(node, ast.FunctionDef):
-        print(node.name)
+        print(f"\nFunction: {node.name}")
+
+        param_count = len(node.args.args)
+        print(f"Parameters: {param_count}")
+
+        for parameter in node.args.args:
+            print(f"  - {parameter.arg}")
