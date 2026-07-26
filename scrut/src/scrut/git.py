@@ -15,22 +15,35 @@ def is_gitrepo():
 
 def get_changed_files():
     result = subprocess.run(
-        ["git" , "diff" , "--name-only"],
+        ["git", "diff", "--name-only"],
         capture_output=True,
         text=True
     )
 
-    print("\n" + "Changed Files:" + "\n"+ result.stdout)
+    print("\nChanged Files:\n" + result.stdout)
     return result.stdout.splitlines()
+
 
 def get_reviewable_files(files):
     reviewable = []
+
     for file in files:
         if file.endswith(".py"):
             reviewable.append(file)
+
     print(reviewable)
+    return reviewable
+
+
+def read_file(file_path):
+    with open(file_path, "r") as file:
+        content = file.read()
+
+    print(content)
 
 
 is_gitrepo()
 changed_files = get_changed_files()
-get_reviewable_files(changed_files)
+reviewable_files = get_reviewable_files(changed_files)
+
+read_file(reviewable_files[0])
