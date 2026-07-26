@@ -1,4 +1,5 @@
 import subprocess
+import ast
 
 def is_gitrepo():
     result = subprocess.run(
@@ -39,11 +40,14 @@ def read_file(file_path):
     with open(file_path, "r") as file:
         content = file.read()
 
-    print(content)
+    return content
 
 
 is_gitrepo()
 changed_files = get_changed_files()
 reviewable_files = get_reviewable_files(changed_files)
 
-read_file(reviewable_files[0])
+source_code = read_file(reviewable_files[0])
+
+parsed = ast.parse(source_code)
+print(parsed)
