@@ -23,6 +23,14 @@ def get_changed_files():
     print("\n" + "Changed Files:" + "\n"+ result.stdout)
     return result.stdout.splitlines()
 
+def get_reviewable_files(files):
+    reviewable = []
+    for file in files:
+        if file.endswith(".py"):
+            reviewable.append(file)
+    print(reviewable)
+
 
 is_gitrepo()
-get_changed_files()
+changed_files = get_changed_files()
+get_reviewable_files(changed_files)
