@@ -27,5 +27,5 @@ cd scrut
 pip install -e 
 ```
 
-License
+License:
 MIT License
