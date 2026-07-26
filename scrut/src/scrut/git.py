@@ -11,5 +11,18 @@ def is_gitrepo():
         return True
     else:
         return False
+    
+
+def get_changed_files():
+    result = subprocess.run(
+        ["git" , "diff" , "--name-only"],
+        capture_output=True,
+        text=True
+    )
+
+    print("\n" + "Changed Files:" + "\n"+ result.stdout)
+    return result.stdout.splitlines()
+
 
 is_gitrepo()
+get_changed_files()
