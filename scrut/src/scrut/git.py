@@ -96,4 +96,13 @@ for node in ast.walk(parsed):
         else:
             print("Nesting Depth: OK")
 
+        FILE_LINE_LIMIT = 350
+        file_line_count = len(source_code.splitlines())
+        print(f"File Lines: {file_line_count}")
+        if file_line_count > FILE_LINE_LIMIT:
+            print("Issue: File too large ({file_line_count}/{FILE_LINE_LIMIT})")
+        else:
+            print("File Size: OK")
+
+
         print("----------------------------")
