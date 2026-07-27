@@ -16,6 +16,8 @@ def is_gitrepo():
     else:
         return False
     
+class user:
+    print("hi")
 
 def get_changed_files():
     result = subprocess.run(
@@ -105,4 +107,19 @@ for node in ast.walk(parsed):
             print("File Size: OK")
 
 
-        print("----------------------------")
+    if isinstance(node, ast.ClassDef):
+            print(f"\nClass: {node.name}")
+        
+            class_start = node.lineno
+            class_end = node.end_lineno
+            class_line_count = class_end - class_start + 1
+        
+            print(f"Lines: {class_line_count}")
+        
+            CLASS_LINE_LIMIT = 200
+        
+            if class_line_count > CLASS_LINE_LIMIT:
+                print(f"Issue: Class too large ({class_line_count}/{CLASS_LINE_LIMIT})")
+            else:
+                print("Class Size: OK")
+
