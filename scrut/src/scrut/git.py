@@ -1,6 +1,8 @@
 import subprocess
 import ast
 
+PARAMETER_LIMIT = 5
+NESTING_LIMIT = 3
 
 def is_gitrepo():
     result = subprocess.run(
@@ -42,7 +44,17 @@ def read_file(file_path):
         content = file.read()
 
     return content
+def get_depth(node, depth=0):
+    max_depth = depth
 
+    for child in ast.iter_child_nodes(node):
+
+        if isinstance(child, (ast.For, ast.If, ast.While)):
+            max_depth = max(max_depth, get_depth(child, depth + 1))
+        else:
+            max_depth = max(max_depth, get_depth(child, depth))
+
+    return max_depth
 
 is_gitrepo()
 changed_files = get_changed_files()
@@ -72,4 +84,16 @@ for node in ast.walk(parsed):
          print("Parameter Count: OK")
         else:
          limit = 5
-         print(f"Issue: Too many parameters ({param_count}/{limit})")
+         print(f"Issue: Too many parameters ({PARAMETER_LIMIT}/{limit})")
+
+        nesting_limit = 3
+        nesting_depth = get_depth(node)
+        
+        print(f"Nesting Depth: {nesting_depth}")
+        
+        if nesting_depth > nesting_limit:
+            print(f"Issue: Nesting too deep ({nesting_depth}/{NESTING_LIMIT})")
+        else:
+            print("Nesting Depth: OK")
+
+        print("----------------------------")
