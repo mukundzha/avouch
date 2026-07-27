@@ -10,11 +10,11 @@ The goal is simple: review your code before anyone else has to.
 
 - Detect Git repositories
 - Detect changed files
+- Parse Python code
+- Add code review rules
 
 ## Roadmap
 
-- Parse Python code
-- Add code review rules
 - Generate useful feedback
 - Build a developer-friendly review workflow
 
