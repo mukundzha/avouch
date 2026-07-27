@@ -67,3 +67,9 @@ for node in ast.walk(parsed):
 
         for parameter in node.args.args:
             print(f"  - {parameter.arg}")
+
+        if param_count <= 5:
+         print("Parameter Count: OK")
+        else:
+         limit = 5
+         print(f"Issue: Too many parameters ({param_count}/{limit})")
