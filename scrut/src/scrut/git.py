@@ -56,6 +56,12 @@ for node in ast.walk(parsed):
     if isinstance(node, ast.FunctionDef):
         print(f"\nFunction: {node.name}")
 
+        lineno = node.lineno
+        end_lineno = node.end_lineno
+        line_count = end_lineno - lineno + 1
+
+        print(f"Lines: {line_count}")
+
         param_count = len(node.args.args)
         print(f"Parameters: {param_count}")
 
