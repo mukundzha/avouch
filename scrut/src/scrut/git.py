@@ -36,8 +36,12 @@ def get_reviewable_files(files):
 
 
 def read_file(file_path):
-    with open(file_path, "r") as file:
+    try:
+      with open(file_path, "r") as file:
         return file.read()
+    except OSError:
+        print(f"Couldn't read {file_path}")
+        return None
 
 
 def get_depth(node, depth=0):
@@ -140,7 +144,15 @@ def main():
         return
 
     source_code = read_file(reviewable_files[0])
-    parsed = ast.parse(source_code)
+
+    if source_code is None:
+        return
+    
+    try:
+        parsed = ast.parse(source_code)
+    except SyntaxError:
+        print("Python syntax error.")
+        return
 
     file_reports = []
     functions_reports = []
