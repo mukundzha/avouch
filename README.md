@@ -1,78 +1,62 @@
 # Scrut
 
-Local static analysis for unstaged Python changes. Runs against `git diff` output, parses changed files with Python's AST, and flags common structural issues before they reach a pull request.
+**scrut** is a static analysis tool that reviews unstaged Python changes before they reach a pull request. It works entirely offline, depends only on the standard library, and runs in under a second.
 
-The tool is in early development. It currently reviews one file per run and checks four structural rules. There is no plugin system, no configuration file, and no CI integration yet.
+It checks four structural rules — function parameters, nesting depth, file size, and class size — by parsing your changed files with Python's AST module.
 
 ---
 
 ## Features
 
-### Repository detection
-
-Detects whether the current working directory is inside a Git repository by running `git rev-parse --is-inside-work-tree`. If not, it exits immediately.
-
-### Changed file collection
-
-Runs `git diff --name-only` to collect unstaged changed files.
-
-### Python file filtering
-
-Filters the changed file list to only `.py` files.
-
-### Static analysis via AST
-
-Parses the first changed Python file using Python's built-in `ast` module, then walks the tree looking for `FunctionDef` and `ClassDef` nodes. Four rules are checked:
-
-- **Function parameter count** — flags functions with more parameters than the configured limit
-- **Nesting depth** — measures how deeply `for` / `if` / `while` blocks are nested inside each function
-- **File size** — flags files exceeding the line limit
-- **Class size** — flags classes exceeding the line limit
-
-### Report generation
-
-Prints a formatted summary to stdout showing each function, class, and file with any issues found. All issues currently carry `WARNING` severity. No machine-readable output format exists yet.
+- Detects whether you are inside a Git repository
+- Collects unstaged changed files via `git diff --name-only`
+- Filters to `.py` files and validates they exist before analysis
+- Parses source code with Python's built-in `ast` module
+- Flags functions with excessive parameters (default >5)
+- Measures `for`/`if`/`while` nesting depth inside functions (default >4)
+- Flags files exceeding 400 lines and classes exceeding 200 lines
+- Prints a formatted report to stdout
 
 ---
 
 ## Architecture
 
-Scrut operates as a single-pass pipeline with no persistence, caching, or external communication.
+Scrut runs as a single synchronous pipeline. No caching, no async, no external services.
 
 ```
 Git repository
-      |
-      v
-  is_gitrepo()          ---- exits if not a Git repo
-      |
-      v
-  get_changed_files()   ---- git diff --name-only
-      |
-      v
-  get_reviewable_files() -- filters to .py files, exits if none
-      |
-      v
-  read_file()           ---- reads the first changed file
-      |
-      v
-  ast.parse()           ---- parses source into AST
-      |
-      v
-  ast.walk()            ---- iterates FunctionDef + ClassDef nodes
-      |
-      v
-  Rule checks           ---- parameter count, nesting depth, line counts
-      |
-      v
-  generate_report()     ---- prints results to stdout
+     |
+     v
+is_gitrepo()          — exits if the working directory is not inside a Git work tree
+     |
+     v
+get_changed_files()   — runs git diff --name-only
+     |
+     v
+get_reviewable_files() — filters changed files to .py, checks they exist
+     |
+     v
+read_file()           — reads the first changed Python file
+     |
+     v
+ast.parse()           — parses source into an AST
+     |
+     v
+ast.walk()            — iterates FunctionDef and ClassDef nodes
+     |
+     v
+Rule checks           — parameter count, nesting depth, file/class line limits
+     |
+     v
+generate_report()     — prints the formatted report to stdout
 ```
 
-The pipeline is fully synchronous. There is no async I/O, no worker pool, and no incremental analysis. Every invocation starts from scratch.
+Every invocation starts from scratch. There is no incremental or cached analysis.
 
-Data model for reports is a list of dictionaries:
+The data model for reports is a list of dictionaries:
 
 ```python
-# Function report structure
+# Function report
 {
     "name": "process_data",
     "lines": 34,
@@ -86,7 +70,7 @@ Data model for reports is a list of dictionaries:
 ```
 
 ```python
-# File and class reports follow the same pattern
+# File and class reports
 {
     "name": "src/handler.py",
     "lines": 450,
@@ -96,40 +80,33 @@ Data model for reports is a list of dictionaries:
 }
 ```
 
-All logic lives in a single module (`git.py`). The `review.py` module exists as a placeholder but contains no code yet.
-
 ---
 
 ## Project structure
 
 ```
 scrut/
-├── pyproject.toml          # pytest configuration only
-├── LICENSE                 # MIT
+├── pyproject.toml        # packaging, metadata, pytest config
+├── LICENSE
 ├── README.md
 ├── .gitignore
-└── scrut/
-    └── src/
-        └── scrut/
-            ├── __init__.py     # empty package marker
-            ├── git.py          # all analysis logic (229 lines)
-            └── review.py       # placeholder for future rule engine
+├── src/
+│   └── scrut/
+│       ├── __init__.py   # package marker (empty)
+│       └── cli.py        # all analysis logic (233 lines)
 └── tests/
-    └── test_git.py             # 7 unit tests (101 lines)
+    └── test_git.py       # 7 unit tests (113 lines)
 ```
 
-The `scrut/src/scrut` nesting is three levels deep because the project uses an `src`-layout. This keeps the package directory separate from the project root and is the recommended layout for Python packaging. The `pyproject.toml` adds `scrut/src` to the Python path for pytest so imports like `from scrut.git import ...` work in tests.
+The only source file is `src/scrut/cli.py`. It contains the full pipeline — Git detection, file filtering, AST parsing, rule checking, and report generation — in a single module.
 
-Two files are empty placeholders:
-
-- **`__init__.py`** — makes the directory a Python package, currently unused
-- **`review.py`** — intended for a future rule engine abstraction
+The test file is named `test_git.py` for historical reasons. It imports from `scrut.cli`.
 
 ---
 
 ## Installation
 
-Requires Python 3.10 or later. No external dependencies.
+Requires **Python 3.10 or later** and **Git 2.0+**. No other dependencies.
 
 ```bash
 git clone https://github.com/mukundzha/scrut.git
@@ -139,42 +116,49 @@ source venv/bin/activate
 pip install -e .
 ```
 
-The `-e` flag installs in editable mode so changes to the source files are reflected immediately.
+The `pyproject.toml` registers a CLI entry point during installation:
+
+```toml
+[project.scripts]
+scrut = "scrut.cli:main"
+```
+
+After install, the `scrut` command is available on your PATH.
 
 ---
 
 ## Usage
 
-Run from inside any Git repository with unstaged changes:
-
 ```bash
-python -m scrut.src.scrut.git
+scrut
 ```
 
-There is no CLI entry point registered in `pyproject.toml`. The tool is invoked via Python module execution. This will be replaced with a proper `scrut` command once the tool matures.
+Or without installing:
 
-### What happens
+```bash
+PYTHONPATH=src python -m scrut.cli
+```
 
-1. Checks that you are in a Git repository
-2. Collects unstaged changed files via `git diff --name-only`
-3. Filters to `.py` files
-4. Reads the **first** `.py` file from the list
+### What the tool does
+
+1. Verifies the current directory is inside a Git repository
+2. Runs `git diff --name-only` to find unstaged changed files
+3. Filters the list to only `.py` files that exist on disk
+4. Reads the **first** `.py` file from the filtered list
 5. Parses it with `ast.parse`
-6. Walks the AST for functions and classes
-7. Checks rules and collects issues
-8. Prints the report
+6. Walks the AST looking for `FunctionDef` and `ClassDef` nodes
+7. Checks each node against four rules
+8. Prints the report to stdout
 
-If no issues are found, the report still shows every function and class with "Issues: None".
+### Exit code
 
-### Exit behavior
-
-The tool exits with code 0 in all cases — even when issues are found, when not in a Git repo, or when a syntax error is encountered. There is currently no mechanism to fail based on issue count.
+The tool always exits with code 0, regardless of issues found.
 
 ---
 
 ## Example output
 
-Running against a file with violations:
+Running against a file that triggers all four rules:
 
 ```
 ==================================================
@@ -183,7 +167,7 @@ SCRUT REPORT
 
 FILE
 --------------------------------------------------
-Name   : src/legacy_handler.py
+Name   : src/handler.py
 Lines  : 500
 Issues:
   [WARNING] File too large (500/400)
@@ -219,23 +203,20 @@ Issues Found       : 3
 ==================================================
 ```
 
-If no changed Python files exist:
+Error messages:
 
-```
-No Python files to review.
-```
-
-If not in a Git repository:
-
-```
-Not inside a Git repository.
-```
+| Scenario | Output |
+|---|---|
+| Not in a Git repo | `Not inside a Git repository.` |
+| No changed Python files | `No Python files to review.` |
+| Python syntax error | `Python syntax error.` |
+| File not readable | `Couldn't read <path>` |
 
 ---
 
 ## Review rules
 
-All thresholds are defined as module-level constants in `scrut/src/scrut/git.py`:
+All thresholds are module-level constants in `src/scrut/cli.py`:
 
 ```python
 PARAMETER_LIMIT = 5
@@ -246,14 +227,16 @@ CLASS_LINE_LIMIT = 200
 
 | Rule | Threshold | Severity | Description |
 |---|---|---|---|
-| Maximum parameters | >5 | WARNING | Function accepts more parameters than the limit |
-| Maximum nesting | >4 | WARNING | Control flow (for/if/while) is nested beyond 4 levels deep inside a function |
-| Maximum file size | >400 lines | WARNING | File exceeds the line limit |
-| Maximum class size | >200 lines | WARNING | Class exceeds the line limit |
+| Maximum parameters | >5 | WARNING | Function has more arguments than allowed |
+| Maximum nesting | >4 | WARNING | `for`/`if`/`while` blocks nested deeper than 4 levels inside a function |
+| Maximum file size | >400 lines | WARNING | Source file exceeds the line count limit |
+| Maximum class size | >200 lines | WARNING | Class definition exceeds the line count limit |
 
-### Nesting depth measurement
+All issues carry `WARNING` severity. There is no `ERROR` level.
 
-The `get_depth()` function recursively walks child AST nodes and counts depth only for `ast.For`, `ast.If`, and `ast.While` nodes. Other constructs like `with`, `try`, and `async for` do not increase nesting depth. This is intentional — the rule targets logical complexity from conditional and loop nesting, not structural Python constructs.
+### Nesting depth
+
+`get_depth()` walks child AST nodes and counts depth only for `ast.For`, `ast.If`, and `ast.While` nodes. This targets logical complexity — `with`, `try`, and `async for` do not increase the counter.
 
 ```python
 def get_depth(node, depth=0):
@@ -266,21 +249,11 @@ def get_depth(node, depth=0):
     return max_depth
 ```
 
-### Severity
-
-All issues are assigned `WARNING` severity. There is no `ERROR` level and no configuration to promote warnings to errors. This is a known limitation.
-
 ---
 
 ## Testing
 
-Uses pytest with `unittest.mock` for subprocess isolation.
-
-```bash
-pytest
-```
-
-Or with verbose output:
+Tests use **pytest** with `unittest.mock` for subprocess isolation.
 
 ```bash
 pytest -v
@@ -296,97 +269,68 @@ tests/test_git.py::test_read_file PASSED
 tests/test_git.py::test_get_changed_files PASSED
 tests/test_git.py::test_is_gitrepo_true PASSED
 tests/test_git.py::test_is_gitrepo_false PASSED
-
-======= 7 passed in 0.12s =======
 ```
 
-### Test coverage
+### What each test covers
 
-| Test | What it covers |
+| Test | What it validates |
 |---|---|
-| `test_get_reviewable_files` | Only `.py` files pass the filter, others excluded |
-| `test_get_depth_no_nesting` | Flat function returns depth 0 |
+| `test_get_reviewable_files` | Only `.py` files that exist on disk pass the filter |
+| `test_get_depth_no_nesting` | A flat function returns depth 0 |
 | `test_get_depth_nested` | `if > while > for` returns depth 3 |
-| `test_read_file` | File contents read correctly with `tmp_path` |
-| `test_get_changed_files` | `subprocess.run` mocked, stdout parsed into list |
-| `test_is_gitrepo_true` | Git detection returns `True` for return code 0 |
-| `test_is_gitrepo_false` | Git detection returns `False` for return code 1 |
+| `test_read_file` | Reads file contents correctly using `tmp_path` |
+| `test_get_changed_files` | Mocks `subprocess.run`, verifies stdout is parsed into a list |
+| `test_is_gitrepo_true` | Returns `True` when `git rev-parse` exits with code 0 |
+| `test_is_gitrepo_false` | Returns `False` when `git rev-parse` exits with code 1 |
 
-Tests use `tmp_path` (pytest built-in fixture) for filesystem operations and `unittest.mock.patch` for subprocess calls. There is no integration test that runs against a real Git repository.
+Tests use `tmp_path` (a pytest built-in fixture) for filesystem operations and `unittest.mock.patch` for subprocess isolation. `get_reviewable_files` now creates real files via `tmp_path.write_text()` and checks for existence — a change from the earlier version that only filtered by extension.
 
-pytest configuration lives in `pyproject.toml`:
+pytest configuration:
 
 ```toml
 [tool.pytest.ini_options]
-pythonpath = ["scrut/src"]
 testpaths = ["tests"]
+pythonpath = ["src"]
 ```
 
-The `pythonpath` setting ensures `from scrut.git import ...` resolves correctly.
+The `pythonpath` setting adds `src/` to `sys.path` so `from scrut.cli import ...` resolves during test collection.
 
 ---
 
 ## Current limitations
 
-These are known gaps in the current implementation:
-
-### Single-file review
-
-Only the first changed Python file is analyzed (`reviewable_files[0]` on line 146 of `git.py`). If 15 files were changed, only one is reviewed. The report data structures support multiple files (they are lists), but the `main()` function never iterates beyond index 0.
-
-### Unstaged changes only
-
-`git diff --name-only` returns unstaged changes. Staged but uncommitted changes are not included. This means if you `git add` a file before running Scrut, it will not be reviewed.
-
-### No CLI entry point
-
-The tool runs via `python -m scrut.src.scrut.git`. There is no `scrut` command installed in the PATH.
-
-### No configuration
-
-All thresholds are hardcoded. There is no config file, no environment variable support, and no command-line flags.
-
-### No formatting options
-
-Output is plain text to stdout. No JSON, no SARIF, no machine-readable formats. Exit code is always 0 regardless of issues found.
-
-### No plugin system
-
-Rules are hardcoded in the AST walk loop. Adding a new rule requires editing `git.py` directly.
+- **Single-file review**: Only the first changed Python file is analyzed (`reviewable_files[0]` in `main()`). The data structures support multiple files but the loop does not iterate.
+- **Unstaged changes only**: `git diff --name-only` does not return staged files. Files added with `git add` are invisible to Scrut.
+- **No exit code signaling**: The tool exits 0 regardless of whether issues are found.
+- **No configuration**: Thresholds are hardcoded. No config file, environment variables, or CLI flags.
+- **Plain text output only**: No JSON, SARIF, or other machine-readable formats.
+- **No rule plugin system**: Adding a new rule means editing `cli.py` directly.
 
 ---
 
 ## Roadmap
 
-These items are planned but not yet implemented:
-
-- Iterate over all changed files, not just the first one
-- Add support for staged files (`git diff --cached`)
-- Register a proper `scrut` CLI entry point via `pyproject.toml`
-- Add JSON output format for CI integration
-- Make rules configurable via a file or environment variables
+- Review all changed files instead of only the first one
+- Support staged files (`git diff --cached`)
+- Add JSON output for CI integration
+- Make rules configurable via `pyproject.toml` or a config file
 - Expand rule set (unused imports, bare except clauses, missing docstrings)
-- Extract rule engine into `review.py`
 - Add pre-commit hook support
-- Support for non-Python file types
 
 ---
 
 ## Contributing
 
-The codebase is small — two source files, one test file, under 350 lines total. A good starting point is reviewing the `main()` function in `git.py` and identifying what to extract next.
+The codebase is a single 233-line module and one 113-line test file. Good starting points:
 
-Potential contribution areas:
+- `generate_report()` has no dedicated test
+- Multi-file iteration in `main()` is the most requested fix
+- A new rule can be added by extending the AST walk loop in `main()`
 
-- Add a test for the `generate_report()` function (currently untested)
-- Implement multi-file iteration in `main()`
-- Add a new rule and its corresponding test
-- Introduce the rule engine abstraction in `review.py`
-
-The project uses standard pytest with `unittest.mock`. Run `pytest` before submitting changes.
+Run `pytest` before submitting changes.
 
 ---
 
 ## License
 
-MIT. See `LICENSE` for the full text.
+MIT. See `LICENSE`.
