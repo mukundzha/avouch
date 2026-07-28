@@ -1,7 +1,7 @@
 import ast
 from unittest.mock import Mock, patch
 
-from scrut.git import (
+from scrut.cli import (
     get_reviewable_files,
     get_depth,
     read_file,
@@ -10,26 +10,38 @@ from scrut.git import (
 )
 
 
-def test_get_reviewable_files():
+def test_get_reviewable_files(tmp_path):
+
+    main = tmp_path / "main.py"
+    hello = tmp_path / "hello.py"
+    readme = tmp_path / "README.md"
+    notes = tmp_path / "notes.txt"
+    image = tmp_path / "image.png"
+
+    main.write_text("")
+    hello.write_text("")
+    readme.write_text("")
+    notes.write_text("")
+    image.write_text("")
 
     files = [
-        "main.py",
-        "README.md",
-        "notes.txt",
-        "hello.py",
-        "image.png",
+        str(main),
+        str(readme),
+        str(notes),
+        str(hello),
+        str(image),
     ]
 
     result = get_reviewable_files(files)
 
     assert result == [
-        "main.py",
-        "hello.py",
+        str(main),
+        str(hello),
     ]
 
 
 def test_get_depth_no_nesting():
-
+  
     code = """
 def foo():
     pass

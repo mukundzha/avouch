@@ -1,3 +1,52 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "scrut"
+version = "0.1.0"
+description = "A lightweight static code review tool for Python."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+authors = [
+    { name = "Mukund" }
+]
+keywords = [
+    "static-analysis",
+    "code-review",
+    "python",
+    "ast",
+    "cli"
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Operating System :: OS Independent",
+    "Topic :: Software Development :: Quality Assurance",
+]
+
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/mukundzha/scrut"
+Repository = "https://github.com/mukundzha/scrut"
+Issues = "https://github.com/mukundzha/scrut/issues"
+
+[project.scripts]
+scrut = "scrut.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
 [tool.pytest.ini_options]
-pythonpath = ["scrut/src"]
 testpaths = ["tests"]
+pythonpath = ["src"]
