@@ -15,8 +15,8 @@ AST-based static analysis for unstaged Python changes.
 - [Quick Start](#quick-start)
 - [Example Output](#example-output)
 - [Review Rules](#review-rules)
-- [Running Tests](#running-tests)
-- [Development](#development)
+- [Data Model](#data-model)
+- [Exit Behavior](#exit-behavior)
 - [Current Limitations](#current-limitations)
 - [Roadmap](#roadmap)
 - [Contributing](#contributing)
@@ -73,31 +73,45 @@ signatures, no fragile patterns.
 ## Architecture
 
 Scrut runs as a single synchronous pipeline. No caching, no async, no external
-services.
+services. Every invocation starts from scratch.
 
 ```mermaid
 flowchart TD
-    Git["Git work tree"]
-    Git --> Check["is_gitrepo()"]
-    Check -->|not a repo| Exit["exit"]
-    Check -->|is a repo| Diff["git diff --name-only"]
-    Diff --> Files["Unstaged files"]
-    Files --> Filter["get_reviewable_files()"]
-    Filter -->|no .py files| Exit
-    Filter --> Read["read_file()"]
-    Read --> Parse["ast.parse()"]
-    Parse -->|SyntaxError| Exit
-    Parse --> Walk["ast.walk()"]
-    Walk --> Params["Parameter check"]
-    Walk --> Nesting["Nesting check"]
-    Walk --> Size["Size checks"]
-    Params --> Report["generate_report()"]
-    Nesting --> Report
-    Size --> Report
-    Report --> Stdout["stdout"]
+    subgraph P1["Phase 1: Git Detection"]
+        A["Git work tree"] --> B{"is_gitrepo()?"}
+        B -->|No| X1["[exit]"]
+    end
+
+    subgraph P2["Phase 2: File Discovery"]
+        B -->|Yes| C["git diff --name-only"]
+        C --> D{"Any .py files?"}
+        D -->|None| X2["[exit]"]
+    end
+
+    subgraph P3["Phase 3: AST Parsing"]
+        D -->|Files| E["read first file"]
+        E --> F{"Valid Python?"}
+        F -->|SyntaxError| X3["[exit]"]
+    end
+
+    subgraph P4["Phase 4: Rule Analysis"]
+        F -->|AST tree| G["ast.walk()"]
+        G --> H["function parameters"]
+        G --> I["nesting depth"]
+        G --> J["file / class size"]
+    end
+
+    subgraph P5["Phase 5: Output"]
+        H --> K["generate_report()"]
+        I --> K
+        J --> K
+        K --> L["stdout"]
+    end
 ```
 
-Every invocation starts from scratch.
+Each phase gates on a decision. If Git detection, file discovery, or parsing
+fails, the pipeline stops and an error message is printed. The rule analysis
+and output phases only run when a file has been parsed successfully.
 
 ---
 
@@ -286,86 +300,73 @@ def get_depth(node, depth=0):
 
 ---
 
-## Running Tests
+## Data Model
 
-Tests use **pytest** with `unittest.mock` for subprocess isolation and
-`tmp_path` for filesystem operations.
+The report is assembled from three dictionary shapes. These are the internal
+data structures passed to `generate_report()`.
 
-```bash
-pytest -v
+### Function report
+
+```python
+{
+    "name": "process_user_data",
+    "lines": 45,
+    "parameters": 12,
+    "nesting_depth": 6,
+    "issues": [
+        {"severity": "WARNING",
+         "message": "Too many parameters (12/5)"},
+        {"severity": "WARNING",
+         "message": "Nesting too deep (6/4)"}
+    ]
+}
 ```
 
-Expected output:
+### File report
 
-```
-tests/test_git.py::test_get_reviewable_files PASSED
-tests/test_git.py::test_get_depth_no_nesting PASSED
-tests/test_git.py::test_get_depth_nested PASSED
-tests/test_git.py::test_read_file PASSED
-tests/test_git.py::test_get_changed_files PASSED
-tests/test_git.py::test_is_gitrepo_true PASSED
-tests/test_git.py::test_is_gitrepo_false PASSED
-```
-
-| Test | What it validates |
-|---|---|
-| `test_get_reviewable_files` | Only `.py` files that exist on disk pass the filter |
-| `test_get_depth_no_nesting` | A flat function returns depth 0 |
-| `test_get_depth_nested` | `if > while > for` returns depth 3 |
-| `test_read_file` | Reads file contents correctly using `tmp_path` |
-| `test_get_changed_files` | Mocks `subprocess.run`, parses stdout into a list |
-| `test_is_gitrepo_true` | Returns `True` when `git rev-parse` exits 0 |
-| `test_is_gitrepo_false` | Returns `False` when `git rev-parse` exits 1 |
-
-pytest configuration in `pyproject.toml`:
-
-```toml
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-pythonpath = ["src"]
+```python
+{
+    "name": "src/handler.py",
+    "lines": 500,
+    "issues": [
+        {"severity": "WARNING",
+         "message": "File too large (500/400)"}
+    ]
+}
 ```
 
-The `pythonpath` setting adds `src/` to `sys.path` so
-`from scrut.cli import ...` resolves during collection.
+### Class report
+
+```python
+{
+    "name": "DataProcessor",
+    "lines": 250,
+    "issues": [
+        {"severity": "WARNING",
+         "message": "Class too large (250/200)"}
+    ]
+}
+```
+
+Each `issues` list is empty when no rules are violated. The severity field is
+always `"WARNING"` — there is no `"ERROR"` level in the current rule set.
 
 ---
 
-## Development
+## Exit Behavior
 
-### Editable install
+Scrut's `main()` function has five possible return paths:
 
-```bash
-pip install -e .
-```
+| Path | Trigger | Output | Exit code |
+|---|---|---|---|
+| No Git repo | `is_gitrepo()` returns `False` | `Not inside a Git repository.` | 0 |
+| No Python files | `get_reviewable_files()` returns `[]` | `No Python files to review.` | 0 |
+| Read failure | `read_file()` catches `OSError` | `Couldn't read <path>` | 0 |
+| Syntax error | `ast.parse()` raises `SyntaxError` | `Python syntax error.` | 0 |
+| Success | All rules checked | Formatted report | 0 |
 
-### Build
-
-```bash
-python -m build
-```
-
-### Package
-
-Build artifacts land in `dist/`:
-
-```
-dist/
-├── scrut-0.1.1-py3-none-any.whl
-└── scrut-0.1.1.tar.gz
-```
-
-### Publish to PyPI
-
-```bash
-twine upload dist/*
-```
-
-### Release checklist
-
-1. Bump version in `pyproject.toml`
-2. Run `pytest`
-3. Build: `python -m build`
-4. Publish: `twine upload dist/*`
+Every path returns a `0` exit code. There is no `sys.exit()` call anywhere in
+the codebase — the script always terminates by returning from `main()`.
 
 ---
 
@@ -407,7 +408,8 @@ Good starting points:
 - Multi-file iteration in `main()` is the most requested fix
 - A new rule can be added by extending the AST walk loop in `main()`
 
-Run `pytest` before submitting changes.
+Run `pytest` before submitting changes. Tests are in `tests/test_git.py` and
+use `unittest.mock` with `tmp_path`.
 
 ---
 
