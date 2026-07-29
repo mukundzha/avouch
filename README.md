@@ -12,7 +12,7 @@ AST-based static analysis for unstaged Python changes.
 - [Architecture](#architecture)
 - [Repository Layout](#repository-layout)
 - [Installation](#installation)
-- [Quick Start](#quick-start)
+- [How to Run the Tool](#how-to-run-the-tool)
 - [Example Output](#example-output)
 - [Review Rules](#review-rules)
 - [Data Model](#data-model)
@@ -139,27 +139,16 @@ pip install -e .
 
 ---
 
-## Quick Start
+## How to Run the Tool
 
 ```bash
-cd /path/to/your/python/project
-# Make unstaged changes to a .py file
 scrut
 ```
 
-Scrut runs this pipeline:
+Run it from any directory inside a Git repo with unstaged changes to a `.py`
+file. No arguments, no flags.
 
-1. Calls `git rev-parse --is-inside-work-tree` — exits if not a Git repo
-2. Runs `git diff --name-only` to collect unstaged changed files
-3. Filters to `.py` files that exist on disk
-4. Reads the first matching file
-5. Parses it with `ast.parse`
-6. Walks the AST for `FunctionDef` and `ClassDef` nodes
-7. Checks each node against four rule thresholds
-8. Prints a formatted report to stdout
-
-> **Note:** Only the first changed Python file is analyzed. The report always
-> shows exactly one file.
+> **Note:** Scrut analyzes only the first changed Python file.
 
 ---
 
@@ -210,16 +199,8 @@ Issues Found       : 3
 ==================================================
 ```
 
-### Error messages
-
-| Scenario | Output |
-|---|---|
-| Not in a Git repo | `Not inside a Git repository.` |
-| No changed Python files | `No Python files to review.` |
-| Python syntax error | `Python syntax error.` |
-| File not readable | `Couldn't read <path>` |
-
-The tool always exits with code 0, regardless of issues found.
+The tool always exits with code 0, regardless of issues found. See
+[Exit Behavior](#exit-behavior) for the full breakdown of every return path.
 
 ---
 
