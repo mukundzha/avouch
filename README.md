@@ -123,38 +123,19 @@ The test file is named `test_git.py` for historical reasons. It imports from
 
 ## Installation
 
-Requires **Python 3.10+** and **Git 2.0+**. No other dependencies.
+Requires Python 3.10+ and Git 2.0+. No other dependencies.
 
-### PyPI
-
+**PyPI**
 ```bash
 pip install scrut
 ```
 
-### Source
-
-```bash
-git clone https://github.com/mukundzha/scrut.git
-cd scrut
-pip install .
-```
-
-### Development
-
+**Source / Development**
 ```bash
 git clone https://github.com/mukundzha/scrut.git
 cd scrut
 pip install -e .
 ```
-
-The `pyproject.toml` registers a CLI entry point:
-
-```toml
-[project.scripts]
-scrut = "scrut.cli:main"
-```
-
-After installation, the `scrut` command is available on your PATH.
 
 ---
 
