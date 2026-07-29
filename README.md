@@ -77,41 +77,22 @@ services. Every invocation starts from scratch.
 
 ```mermaid
 flowchart TD
-    subgraph P1["Phase 1: Git Detection"]
-        A["Git work tree"] --> B{"is_gitrepo()?"}
-        B -->|No| X1["[exit]"]
-    end
-
-    subgraph P2["Phase 2: File Discovery"]
-        B -->|Yes| C["git diff --name-only"]
-        C --> D{"Any .py files?"}
-        D -->|None| X2["[exit]"]
-    end
-
-    subgraph P3["Phase 3: AST Parsing"]
-        D -->|Files| E["read first file"]
-        E --> F{"Valid Python?"}
-        F -->|SyntaxError| X3["[exit]"]
-    end
-
-    subgraph P4["Phase 4: Rule Analysis"]
-        F -->|AST tree| G["ast.walk()"]
-        G --> H["function parameters"]
-        G --> I["nesting depth"]
-        G --> J["file / class size"]
-    end
-
-    subgraph P5["Phase 5: Output"]
-        H --> K["generate_report()"]
-        I --> K
-        J --> K
-        K --> L["stdout"]
-    end
+    A["Git work tree"] --> B{"is_gitrepo()"}
+    B -- "No" --> X["exit"]
+    B -- "Yes" --> C["git diff --name-only"]
+    C --> D{"Has .py files?"}
+    D -- "No" --> X
+    D -- "Yes" --> F["ast.parse()"]
+    F -- "Error" --> X
+    F -- "AST" --> G["ast.walk()"]
+    G --> H["Check 4 rules"]
+    H --> I["generate_report()"]
+    I --> J["stdout"]
 ```
 
-Each phase gates on a decision. If Git detection, file discovery, or parsing
-fails, the pipeline stops and an error message is printed. The rule analysis
-and output phases only run when a file has been parsed successfully.
+The main flow goes down the center. Each decision gates the pipeline — if
+Git detection, file discovery, or parsing fails, Scrut prints an error and
+returns. The rule checks and report only run on valid parsed files.
 
 ---
 
