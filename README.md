@@ -12,7 +12,7 @@ AST-based static analysis for unstaged Python changes.
 - [Architecture](#architecture)
 - [Repository Layout](#repository-layout)
 - [Installation](#installation)
-- [How to Run the Tool](#how-to-run-the-tool)
+- [Quick Start](#quick-start)
 - [Example Output](#example-output)
 - [Review Rules](#review-rules)
 - [Data Model](#data-model)
@@ -199,8 +199,16 @@ Issues Found       : 3
 ==================================================
 ```
 
-The tool always exits with code 0, regardless of issues found. See
-[Exit Behavior](#exit-behavior) for the full breakdown of every return path.
+### Error messages
+
+| Scenario | Output |
+|---|---|
+| Not in a Git repo | `Not inside a Git repository.` |
+| No changed Python files | `No Python files to review.` |
+| Python syntax error | `Python syntax error.` |
+| File not readable | `Couldn't read <path>` |
+
+The tool always exits with code 0, regardless of issues found.
 
 ---
 
@@ -337,19 +345,19 @@ the codebase — the script always terminates by returning from `main()`.
 - Add JSON output for CI integration
 - Make rules configurable via `pyproject.toml`
 - Expand rule set (unused imports, bare except clauses, missing docstrings)
+## Contributing
 - Add pre-commit hook support
 
 ---
 
-## Contributing
 
-The codebase is a single 233-line module and one 113-line test file.
+The codebase is a single 233-line module and one 113-line test file. 
 
 Good starting points:
 
 - `generate_report()` has no dedicated test
 - Multi-file iteration in `main()` is the most requested fix
-- A new rule can be added by extending the AST walk loop in `main()`
+- A new rule can be added by extending the AST walk loop in `main()` 
 
 Run `pytest` before submitting changes. Tests are in `tests/test_git.py` and
 use `unittest.mock` with `tmp_path`.
