@@ -1,0 +1,6 @@
+[limits]
+max_parameters = 1
+max_nesting = 1
+max_function_lines = 10
+max_class_lines = 20
+max_file_lines = 30

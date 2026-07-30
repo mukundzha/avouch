@@ -1,12 +1,8 @@
 import subprocess
 from pathlib import Path
 import ast
-
-PARAMETER_LIMIT = 5
-NESTING_LIMIT = 4
-FILE_LINE_LIMIT = 400
-CLASS_LINE_LIMIT = 200
-
+from scrut.config.loader import load_config
+from scrut.config.default import DEFAULT_LIMITS
 
 def is_gitrepo():
     result = subprocess.run(
@@ -40,6 +36,7 @@ def get_reviewable_files(files):
 
 
 def read_file(file_path):
+    
     try:
       with open(file_path, "r") as file:
         return file.read()
@@ -135,6 +132,9 @@ def generate_report(function_reports, file_reports, class_reports):
 
 def main():
 
+    config = load_config()
+    limits = config.get('limits', DEFAULT_LIMITS)
+
     if not is_gitrepo():
         print("Not inside a Git repository.")
         return
@@ -172,16 +172,16 @@ def main():
             param_count = len(node.args.args)
             nesting_depth = get_depth(node)
 
-            if param_count > PARAMETER_LIMIT:
+            if param_count > limits["max_parameters"]:
                 issues.append({
                     "severity": "WARNING",
-                    "message": f"Too many parameters ({param_count}/{PARAMETER_LIMIT})"
+                    "message": f"Too many parameters ({param_count}/{limits['max_parameters']})"
                 })
 
-            if nesting_depth > NESTING_LIMIT:
+            if nesting_depth > limits["max_nesting"]:
                 issues.append({
                     "severity": "WARNING",
-                    "message": f"Nesting too deep ({nesting_depth}/{NESTING_LIMIT})"
+                    "message": f"Nesting too deep ({nesting_depth}/{limits['max_nesting']})"
                 })
 
             functions_reports.append({
@@ -198,10 +198,10 @@ def main():
 
             class_line_count = node.end_lineno - node.lineno + 1
 
-            if class_line_count > CLASS_LINE_LIMIT:
+            if class_line_count > limits["max_class_lines"]:
                 issues.append({
                     "severity": "WARNING",
-                    "message": f"Class too large ({class_line_count}/{CLASS_LINE_LIMIT})"
+                    "message": f"Class too large ({class_line_count}/{limits['max_class_lines']})"
                 })
 
             class_reports.append({
@@ -214,10 +214,10 @@ def main():
 
     file_issues = []
 
-    if file_line_count > FILE_LINE_LIMIT:
+    if file_line_count > limits["max_file_lines"]:
         file_issues.append({
             "severity": "WARNING",
-            "message": f"File too large ({file_line_count}/{FILE_LINE_LIMIT})"
+            "message": f"File too large ({file_line_count}/{limits['max_file_lines']})"
         })
 
     file_reports.append({
