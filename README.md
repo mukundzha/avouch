@@ -12,7 +12,7 @@ AST-based static analysis for unstaged Python changes.
 - [Architecture](#architecture)
 - [Repository Layout](#repository-layout)
 - [Installation](#installation)
-- [Quick Start](#quick-start)
+- [How to Run the Tool](#how-to-run-the-tool)
 - [Example Output](#example-output)
 - [Review Rules](#review-rules)
 - [Data Model](#data-model)
@@ -30,7 +30,7 @@ Scrut is a CLI tool that analyzes unstaged changes in Git repositories. It
 parses changed Python files with `ast.parse`, checks four structural rules, and
 prints a formatted report — zero dependencies beyond Python 3.10+ and Git.
 
-No configuration files. No plugins. No network access.
+Optional configuration via `scrut.toml`. No plugins. No network access.
 
 It is for Python developers who want lightweight, offline feedback on code
 structure before opening a pull request.
@@ -62,10 +62,11 @@ signatures, no fragile patterns.
 - **Unstaged file collection** — reads `git diff --name-only` for changed files
 - **`.py` file filtering** — only analyzes files with `.py` extension that exist on disk
 - **AST parsing** — uses Python's standard `ast.parse` for all analysis
-- **Parameter threshold** — warns when a function exceeds 5 parameters
-- **Nesting threshold** — warns when `for`/`if`/`while` blocks exceed 4 levels
-- **File size threshold** — warns when a file exceeds 400 lines
-- **Class size threshold** — warns when a class exceeds 200 lines
+- **Configurable thresholds** — limits read from `scrut.toml`; falls back to built-in defaults
+- **Parameter threshold** — warns when a function exceeds the configured limit
+- **Nesting threshold** — warns when `for`/`if`/`while` blocks exceed the configured depth
+- **File size threshold** — warns when a file exceeds the configured line limit
+- **Class size threshold** — warns when a class exceeds the configured line limit
 - **Formatted report** — structured summary with per-function and per-class breakdowns
 
 ---
@@ -77,12 +78,13 @@ services. Every invocation starts from scratch.
 
 ```mermaid
 flowchart TD
-    A["Git work tree"] --> B{"is_gitrepo()"}
-    B -- "No" --> X["exit"]
-    B -- "Yes" --> C["git diff --name-only"]
-    C --> D{"Has .py files?"}
-    D -- "No" --> X
-    D -- "Yes" --> F["ast.parse()"]
+    A["load_config()"] --> B["scrut.toml / defaults"]
+    B --> C{"is_gitrepo()"}
+    C -- "No" --> X["exit"]
+    C -- "Yes" --> D["git diff --name-only"]
+    D --> E{"Has .py files?"}
+    E -- "No" --> X
+    E -- "Yes" --> F["ast.parse()"]
     F -- "Error" --> X
     F -- "AST" --> G["ast.walk()"]
     G --> H["Check 4 rules"]
@@ -90,9 +92,10 @@ flowchart TD
     I --> J["stdout"]
 ```
 
-The main flow goes down the center. Each decision gates the pipeline — if
-Git detection, file discovery, or parsing fails, Scrut prints an error and
-returns. The rule checks and report only run on valid parsed files.
+The main flow goes down the center. Scrut first loads limits from `scrut.toml`
+(or falls back to `DEFAULT_LIMITS`). Each decision gates the pipeline — if Git
+detection, file discovery, or parsing fails, Scrut prints an error and returns.
+The rule checks and report only run on valid parsed files.
 
 ---
 
@@ -101,20 +104,26 @@ returns. The rule checks and report only run on valid parsed files.
 ```
 scrut/
 ├── pyproject.toml      # Packaging, metadata, pytest config
+├── scrut.toml          # User-configurable limits
 ├── LICENSE              # MIT
 ├── README.md
 ├── src/
 │   └── scrut/
 │       ├── __init__.py  # Package marker (empty)
-│       └── cli.py       # Entire pipeline: 233 lines
+│       ├── cli.py       # Pipeline: Git, AST, report: 233 lines
+│       └── config/
+│           ├── __init__.py
+│           ├── default.py    # DEFAULT_LIMITS dict
+│           ├── loader.py     # scrut.toml loading + merge
+│           └── validator.py  # Reserved for future use
 ├── tests/
 │   └── test_git.py      # 7 unit tests: 113 lines
 └── dist/                # Built wheel and source distribution
 ```
 
-The entire implementation lives in a single module: `src/scrut/cli.py`. It
-contains Git integration, file filtering, AST parsing, rule checking, and
-report generation — all in one file.
+The analysis pipeline lives in `src/scrut/cli.py`. Configuration loading is
+split into the `scrut/config/` package: defaults live in `default.py`, the
+TOML reader and merge logic live in `loader.py`.
 
 The test file is named `test_git.py` for historical reasons. It imports from
 `scrut.cli`.
@@ -214,16 +223,29 @@ The tool always exits with code 0, regardless of issues found.
 
 ## Review Rules
 
-All thresholds are module-level constants in `src/scrut/cli.py`:
+Thresholds are defined in `src/scrut/config/default.py` as a dictionary:
 
 ```python
-PARAMETER_LIMIT = 5
-NESTING_LIMIT = 4
-FILE_LINE_LIMIT = 400
-CLASS_LINE_LIMIT = 200
+DEFAULT_LIMITS = {
+    "max_parameters": 5,
+    "max_nesting": 4,
+    "max_function_lines": 50,
+    "max_class_lines": 200,
+    "max_file_lines": 400,
+}
 ```
 
-| Rule | Threshold | Severity | Description |
+To override, create a `scrut.toml` in the project root with a `[limits]` table:
+
+```toml
+[limits]
+max_parameters = 3
+max_nesting = 2
+```
+
+Only the keys you set are overridden — missing keys inherit from `DEFAULT_LIMITS`.
+
+| Rule | Default threshold | Severity | Description |
 |---|---|---|---|
 | Maximum parameters | >5 | WARNING | Function has more arguments than allowed |
 | Maximum nesting depth | >4 | WARNING | `for`/`if`/`while` blocks nested deeper than 4 levels |
@@ -329,8 +351,6 @@ the codebase — the script always terminates by returning from `main()`.
   or committed files
 - **No exit code signaling** — the tool always exits 0, even when issues
   are found
-- **No configuration** — thresholds are hardcoded; no config file,
-  environment variables, or CLI flags
 - **Plain text output only** — no JSON, SARIF, or other machine-readable
   formats
 - **No rule plugin system** — adding a new rule means editing `cli.py`
@@ -343,7 +363,6 @@ the codebase — the script always terminates by returning from `main()`.
 - Review all changed files instead of only the first one
 - Support staged files (`git diff --cached`)
 - Add JSON output for CI integration
-- Make rules configurable via `pyproject.toml`
 - Expand rule set (unused imports, bare except clauses, missing docstrings)
 ## Contributing
 - Add pre-commit hook support
@@ -351,13 +370,14 @@ the codebase — the script always terminates by returning from `main()`.
 ---
 
 
-The codebase is a single 233-line module and one 113-line test file. 
+The codebase is shaped around a single analysis module and a config package.
 
 Good starting points:
 
 - `generate_report()` has no dedicated test
 - Multi-file iteration in `main()` is the most requested fix
-- A new rule can be added by extending the AST walk loop in `main()` 
+- A new rule can be added by extending the AST walk loop in `main()`
+- The `config/` package is new — `validator.py` is still empty 
 
 Run `pytest` before submitting changes. Tests are in `tests/test_git.py` and
 use `unittest.mock` with `tmp_path`.
