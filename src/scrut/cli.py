@@ -4,23 +4,19 @@ import ast
 from scrut.config.loader import load_config
 from scrut.config.default import DEFAULT_LIMITS
 
+
 def is_gitrepo():
     result = subprocess.run(
-        ["git", "rev-parse", "--is-inside-work-tree"],
-        capture_output=True,
-        text=True
+        ["git", "rev-parse", "--is-inside-work-tree"], capture_output=True, text=True
     )
-    return result.returncode == 0 
+    return result.returncode == 0
 
 
 def get_changed_files():
     result = subprocess.run(
-        ["git", "diff", "--name-only"],
-        capture_output=True,
-        text=True
+        ["git", "diff", "HEAD", "--name-only"], capture_output=True, text=True
     )
     return result.stdout.splitlines()
-
 
 
 def get_reviewable_files(files):
@@ -36,10 +32,10 @@ def get_reviewable_files(files):
 
 
 def read_file(file_path):
-    
+
     try:
-      with open(file_path, "r") as file:
-        return file.read()
+        with open(file_path, "r") as file:
+            return file.read()
     except OSError:
         print(f"Couldn't read {file_path}")
         return None
@@ -60,8 +56,8 @@ def get_depth(node, depth=0):
 
 def generate_report(function_reports, file_reports, class_reports):
 
-    print("=" * 50)
     print("SCRUT REPORT")
+    print("=" * 50)
     print("=" * 50)
 
     total_issues = 0
@@ -78,6 +74,8 @@ def generate_report(function_reports, file_reports, class_reports):
             for issue in report["issues"]:
                 print(f"  [{issue['severity']}] {issue['message']}")
             total_issues += len(report["issues"])
+            print("")
+            # print("==============================")
         else:
             print("Issues: None")
 
@@ -133,98 +131,142 @@ def generate_report(function_reports, file_reports, class_reports):
 def main():
 
     config = load_config()
-    limits = config.get('limits', DEFAULT_LIMITS)
+    limits = config.get("limits", DEFAULT_LIMITS)
 
     if not is_gitrepo():
         print("Not inside a Git repository.")
         return
 
+    
     changed_files = get_changed_files()
-
     reviewable_files = get_reviewable_files(changed_files)
 
     if not reviewable_files:
         print("No Python files to review.")
         return
 
-    source_code = read_file(reviewable_files[0])
-
-    if source_code is None:
-        return
-    
-    try:
-        parsed = ast.parse(source_code)
-    except SyntaxError:
-        print("Python syntax error.")
-        return
-
     file_reports = []
     functions_reports = []
     class_reports = []
 
-    for node in ast.walk(parsed):
+    def analyze_file(file_path, limits):
+        source_code = read_file(file_path)
 
-        if isinstance(node, ast.FunctionDef):
+        if source_code is None:
+            return (
+                [],
+                [
+                    {
+                        "name": file_path,
+                        "lines": 0,
+                        "issues": [
+                            {"severity": "ERROR", "message": "Could not read file"}
+                        ],
+                    }
+                ],
+                [],
+            )
 
-            issues = []
+        try:
+            parsed = ast.parse(source_code)
+        except SyntaxError:
+            return (
+                [],
+                [
+                    {
+                        "name": file_path,
+                        "lines": 0,
+                        "issues": [
+                            {"severity": "ERROR", "message": "Python syntax error"}
+                        ],
+                    }
+                ],
+                [],
+            )
 
-            line_count = node.end_lineno - node.lineno + 1
-            param_count = len(node.args.args)
-            nesting_depth = get_depth(node)
+        funcs = []
+        cls = []
 
-            if param_count > limits["max_parameters"]:
-                issues.append({
+        for node in ast.walk(parsed):
+            if isinstance(node, ast.FunctionDef):
+
+                issues = []
+                line_count = node.end_lineno - node.lineno + 1
+                param_count = len(node.args.args)
+                nesting_depth = get_depth(node)
+
+                if line_count > limits["max_function_lines"]:
+                    issues.append(
+                        {
+                            "severity": "WARNING",
+                            "message": f"Function too long ({line_count}/{limits['max_function_lines']})",
+                        }
+                    )
+
+                if param_count > limits["max_parameters"]:
+                    issues.append(
+                        {
+                            "severity": "WARNING",
+                            "message": f"Too many parameters ({param_count}/{limits['max_parameters']})",
+                        }
+                    )
+
+                if nesting_depth > limits["max_nesting"]:
+                    issues.append(
+                        {
+                            "severity": "WARNING",
+                            "message": f"Nesting too deep ({nesting_depth}/{limits['max_nesting']})",
+                        }
+                    )
+
+                funcs.append(
+                    {
+                        "name": node.name,
+                        "lines": line_count,
+                        "parameters": param_count,
+                        "nesting_depth": nesting_depth,
+                        "issues": issues,
+                    }
+                )
+
+            elif isinstance(node, ast.ClassDef):
+                issues = []
+                class_line_count = node.end_lineno - node.lineno + 1
+
+                if class_line_count > limits["max_class_lines"]:
+                    issues.append(
+                        {
+                            "severity": "WARNING",
+                            "message": f"Class too large ({class_line_count}/{limits['max_class_lines']})",
+                        }
+                    )
+
+                cls.append(
+                    {"name": node.name, "lines": class_line_count, "issues": issues}
+                )
+
+        file_line_count = len(source_code.splitlines())
+        file_issues = []
+
+        if file_line_count > limits["max_file_lines"]:
+            file_issues.append(
+                {
                     "severity": "WARNING",
-                    "message": f"Too many parameters ({param_count}/{limits['max_parameters']})"
-                })
+                    "message": f"File too large ({file_line_count}/{limits['max_file_lines']})",
+                }
+            )
 
-            if nesting_depth > limits["max_nesting"]:
-                issues.append({
-                    "severity": "WARNING",
-                    "message": f"Nesting too deep ({nesting_depth}/{limits['max_nesting']})"
-                })
+        return (
+            funcs,
+            [{"name": file_path, "lines": file_line_count, "issues": file_issues}],
+            cls,
+        )
 
-            functions_reports.append({
-                "name": node.name,
-                "lines": line_count,
-                "parameters": param_count,
-                "nesting_depth": nesting_depth,
-                "issues": issues
-            })
-
-        if isinstance(node, ast.ClassDef):
-
-            issues = []
-
-            class_line_count = node.end_lineno - node.lineno + 1
-
-            if class_line_count > limits["max_class_lines"]:
-                issues.append({
-                    "severity": "WARNING",
-                    "message": f"Class too large ({class_line_count}/{limits['max_class_lines']})"
-                })
-
-            class_reports.append({
-                "name": node.name,
-                "lines": class_line_count,
-                "issues": issues
-            })
-
-    file_line_count = len(source_code.splitlines())
-
-    file_issues = []
-
-    if file_line_count > limits["max_file_lines"]:
-        file_issues.append({
-            "severity": "WARNING",
-            "message": f"File too large ({file_line_count}/{limits['max_file_lines']})"
-        })
-
-    file_reports.append({
-        "name": reviewable_files[0],
-        "lines": file_line_count,
-        "issues": file_issues
-    })
+    for file_path in reviewable_files:
+        functions, files, classes = analyze_file(file_path, limits)
+        functions_reports.extend(functions)
+        file_reports.extend(files)
+        class_reports.extend(classes)
 
     generate_report(functions_reports, file_reports, class_reports)
 
