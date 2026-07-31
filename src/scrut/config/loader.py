@@ -6,7 +6,7 @@ from .default import DEFAULT_LIMITS
 CONFIG_FILE = "scrut.toml"
 
 
-def load_config():  
+def load_config():
 
     config_path = Path(CONFIG_FILE)
 

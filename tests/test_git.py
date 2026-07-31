@@ -1,4 +1,5 @@
 import ast
+import subprocess
 from unittest.mock import Mock, patch
 
 from scrut.cli import (
@@ -7,6 +8,7 @@ from scrut.cli import (
     read_file,
     get_changed_files,
     is_gitrepo,
+    analyze_file,
     main,
 )
 from scrut.config.loader import load_config, merge_limits
@@ -136,9 +138,7 @@ def test_main_reviews_all_files(tmp_path, monkeypatch, capsys):
     )
     monkeypatch.setattr(
         "scrut.cli.subprocess.run",
-        lambda *a, **k: Mock(
-            returncode=0, stdout="good.py\nbad.py\nbroken.py\n"
-        ),
+        lambda *a, **k: Mock(returncode=0, stdout="good.py\nbad.py\nbroken.py\n"),
     )
 
     main()
@@ -150,4 +150,66 @@ def test_main_reviews_all_files(tmp_path, monkeypatch, capsys):
     assert "broken.py" in out
     assert "Python syntax error" in out
     assert "Too many parameters (2/1)" in out
+    assert "Files Reviewed     : 3" in out
+
+
+def test_analyze_file_list_with_syntax_error(tmp_path):
+
+    good = tmp_path / "good.py"
+    clean = tmp_path / "clean.py"
+    broken = tmp_path / "broken.py"
+
+    good.write_text("def ok():\n    pass\n")
+    clean.write_text("x = 1\n")
+    broken.write_text("def broken(\n")
+
+    results = [
+        analyze_file(str(path), DEFAULT_LIMITS) for path in [good, clean, broken]
+    ]
+
+    assert len(results) == 3
+
+    assert results[0][1][0]["issues"] == []
+    assert results[1][1][0]["issues"] == []
+    assert results[2][1][0]["issues"] == [
+        {"severity": "ERROR", "message": "Python syntax error"}
+    ]
+
+    assert results[0][0][0]["name"] == "ok"
+    assert results[2][0] == []
+
+
+def test_main_integration_multiple_changed_files(tmp_path, monkeypatch, capsys):
+
+    def git(*args):
+        subprocess.run(["git", *args], cwd=tmp_path, check=True, capture_output=True)
+
+    git("init", "-q")
+    git("config", "user.email", "test@example.com")
+    git("config", "user.name", "Test")
+
+    (tmp_path / "a.py").write_text("def a():\n    pass\n")
+    (tmp_path / "b.py").write_text("def b():\n    pass\n")
+    (tmp_path / "c.py").write_text("def c():\n    pass\n")
+    (tmp_path / "notes.txt").write_text("notes\n")
+
+    git("add", "-A")
+    git("-c", "commit.gpgsign=false", "commit", "-q", "-m", "initial")
+
+    (tmp_path / "a.py").write_text("def a():\n    return 1\n")
+    (tmp_path / "c.py").write_text("def c():\n    return 2\n")
+    (tmp_path / "d.py").write_text("def d():\n    pass\n")
+    (tmp_path / "notes.txt").write_text("updated\n")
+
+    git("add", "-A")
+
+    monkeypatch.chdir(tmp_path)
+
+    main()
+
+    out = capsys.readouterr().out
+
+    assert "a.py" in out
+    assert "c.py" in out
+    assert "d.py" in out
     assert "Files Reviewed     : 3" in out
