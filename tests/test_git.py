@@ -2,6 +2,8 @@ import ast
 import subprocess
 from unittest.mock import Mock, patch
 
+import pytest
+
 from scrut.cli import (
     get_reviewable_files,
     get_depth,
@@ -9,6 +11,7 @@ from scrut.cli import (
     get_changed_files,
     is_gitrepo,
     analyze_file,
+    check_depth,
     main,
 )
 from scrut.config.loader import load_config, merge_limits
@@ -89,6 +92,124 @@ def test_get_depth_nested():
     )
 
     assert get_depth(tree.body[0]) == 3
+
+
+def test_get_depth_all_block_nodes():
+
+    cases = [
+        ("def foo():\n    if True:\n        pass\n", 1),
+        ("def foo():\n    for i in range(3):\n        pass\n", 1),
+        ("def foo():\n    while True:\n        pass\n", 1),
+        ("async def foo():\n    async for i in aiter():\n        pass\n", 1),
+        ("def foo():\n    with open('f') as f:\n        pass\n", 1),
+        ("async def foo():\n    async with conn:\n        pass\n", 1),
+        (
+            "def foo():\n"
+            "    try:\n"
+            "        pass\n"
+            "    except Exception:\n"
+            "        pass\n",
+            1,
+        ),
+        ("def foo():\n    match x:\n        case 1:\n            pass\n", 1),
+    ]
+
+    for code, expected in cases:
+        assert get_depth(ast.parse(code).body[0]) == expected
+
+
+def test_get_depth_mixed_chain():
+
+    code = (
+        "def foo():\n"
+        "    if True:\n"
+        "        for i in range(3):\n"
+        "            with open('f') as f:\n"
+        "                try:\n"
+        "                    match x:\n"
+        "                        case 1:\n"
+        "                            pass\n"
+        "                except Exception:\n"
+        "                    pass\n"
+    )
+
+    assert check_depth(code) == 5
+
+
+def test_get_depth_sibling_blocks():
+
+    code = (
+        "def foo():\n"
+        "    if True:\n"
+        "        pass\n"
+        "    for i in range(3):\n"
+        "        pass\n"
+        "    with open('f') as f:\n"
+        "        pass\n"
+    )
+
+    assert check_depth(code) == 1
+
+
+def test_get_depth_non_block_constructs():
+
+    code = (
+        "def foo():\n"
+        "    items = [x for x in range(10)]\n"
+        "    double = lambda x: x * 2\n"
+        "    total = sum(x for x in range(5))\n"
+        "    def inner():\n"
+        "        return 1\n"
+    )
+
+    assert check_depth(code) == 0
+
+
+def test_get_depth_nested_function_blocks_count_from_same_level():
+
+    code = (
+        "def outer():\n"
+        "    def inner():\n"
+        "        if True:\n"
+        "            pass\n"
+        "    return inner\n"
+    )
+
+    assert check_depth(code) == 1
+
+
+def test_check_depth_returns_depth():
+
+    code = "def foo():\n    if True:\n        for i in range(3):\n            pass\n"
+
+    assert check_depth(code) == 2
+
+
+def test_check_depth_no_function_raises():
+
+    with pytest.raises(ValueError):
+        check_depth("x = 1\n")
+
+
+def test_analyze_file_nesting_warning(tmp_path):
+
+    deep = tmp_path / "deep.py"
+    deep.write_text(
+        "def foo():\n"
+        "    if True:\n"
+        "        for i in range(3):\n"
+        "            with open('f') as f:\n"
+        "                pass\n"
+    )
+
+    limits = {**DEFAULT_LIMITS, "max_nesting": 2}
+
+    funcs, files, classes = analyze_file(str(deep), limits)
+
+    assert funcs[0]["nesting_depth"] == 3
+    assert funcs[0]["issues"] == [
+        {"severity": "WARNING", "message": "Nesting too deep (3/2)"}
+    ]
 
 
 def test_load_config_default(tmp_path, monkeypatch):
