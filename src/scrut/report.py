@@ -35,9 +35,9 @@ def render_report(function_reports, file_reports, class_reports):
     print()
     print(
         _style(str(len(issues)), 33)
-        + _style(" files need attention · ", 0)
+        + _style(" file(s) need attention · ", 0)
         + _style(str(passed), 32)
-        + _style(" files passed", 0)
+        + _style(" file(s) passed", 0)
     )
     print()
 

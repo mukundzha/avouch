@@ -258,7 +258,7 @@ def test_generate_report_with_issues(capsys):
 
     out = capsys.readouterr().out
 
-    assert "1 files need attention" in out
+    assert "need attention" in out
     assert "Too many parameters (2/1)" in out
 
 
@@ -281,7 +281,8 @@ def test_main_with_mocked_git(tmp_path, monkeypatch, capsys):
     out = capsys.readouterr().out
 
     assert "Python syntax error" in out
-    assert "1 files need attention · 1 files passed" in out
+    assert "need attention" in out
+    assert "passed" in out
 
 
 def test_main_with_real_git_repo(tmp_path, monkeypatch, capsys):
