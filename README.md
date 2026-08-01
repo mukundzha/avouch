@@ -72,8 +72,6 @@ pip install -e .
 
 Both register the `scrut` console script (`scrut.cli:main`).
 
-![scrut report in the terminal](images/ui.png)
-
 ---
 
 ## Usage
