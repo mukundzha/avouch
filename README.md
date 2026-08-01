@@ -225,27 +225,9 @@ every function it calls lives in another module, and nothing imports
 
 ```mermaid
 flowchart LR
-    subgraph git[git.py]
-        A[is_gitrepo]
-        B[get_changed_files<br/>git diff HEAD --name-only]
-        C[get_reviewable_files<br/>.py + exists]
-    end
-    subgraph cfg[config]
-        D[load_config<br/>scrut.toml + defaults]
-    end
-    subgraph ana[analyzer.py]
-        E[read_file utf-8]
-        F[ast.parse]
-        G[analyze_file<br/>5 rule checks]
-    end
-    subgraph rep[report.py]
-        H[render_report]
-    end
-    A --> B --> C
-    D --> G
-    C --> G
-    G --> H
-    H --> I([terminal])
+    G[git.py<br/>review set: git diff HEAD] --> A[analyzer.py<br/>AST · five rules]
+    C[config<br/>scrut.toml + defaults] --> A
+    A --> R[report.py<br/>colored report]
 ```
 
 | Module | Role | Exports |
@@ -256,41 +238,6 @@ flowchart LR
 | `report.py` | Output rendering | `render_report`, `generate_report` |
 | `config/default.py` | Default limits | `DEFAULT_LIMITS` |
 | `config/loader.py` | TOML loading + merge | `load_config`, `merge_limits` |
-
-### Anatomy of a run
-
-```mermaid
-sequenceDiagram
-    autonumber
-    participant T as terminal
-    participant C as cli.main
-    participant G as git.py
-    participant L as config.loader
-    participant A as analyzer.analyze_file
-    participant R as report.render_report
-
-    T->>C: scrut
-    C->>L: load_config()
-    L-->>C: limits (toml merged over defaults)
-    C->>G: is_gitrepo()
-    G-->>C: true | "Not inside a Git repository."
-    C->>G: get_changed_files()
-    G-->>C: paths from git diff HEAD --name-only
-    C->>G: get_reviewable_files(paths)
-    G-->>C: existing .py files | "No Python files to review."
-    loop every reviewable file
-        C->>A: analyze_file(path, limits)
-        A-->>C: (functions, files, classes)
-    end
-    C->>R: generate_report(functions, files, classes)
-    R-->>T: colored report
-```
-
-Two details are intentional. First, the analyzer returns flat lists and the
-renderer rebuilds per-file grouping at display time — analysis and
-presentation stay decoupled. Second, a clean run prints `✓ All clean.` and
-nothing else; the summary block appears only when there is something to
-read.
 
 ### Repository layout
 
