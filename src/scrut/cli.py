@@ -1,6 +1,3 @@
-import subprocess
-from pathlib import Path
-import ast
 from scrut.config.loader import load_config
 from scrut.config.default import DEFAULT_LIMITS
 from scrut.analyzer import analyze_file

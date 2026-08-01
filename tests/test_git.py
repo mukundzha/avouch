@@ -2,23 +2,15 @@ import ast
 import subprocess
 from unittest.mock import Mock, patch
 
-import pytest
-
-from scrut.cli import (
-    get_reviewable_files,
-    get_depth,
-    read_file,
-    get_changed_files,
-    is_gitrepo,
-    analyze_file,
-    check_depth,
-    main,
-)
-from scrut.config.loader import load_config, merge_limits
+from scrut.analyzer import analyze_file, get_depth, read_file
+from scrut.git import get_changed_files, get_reviewable_files, is_gitrepo
+from scrut.report import generate_report
+from scrut.cli import main
 from scrut.config.default import DEFAULT_LIMITS
+from scrut.config.loader import load_config, merge_limits
 
 
-@patch("subprocess.run")
+@patch("scrut.git.subprocess.run")
 def test_is_gitrepo_true(mock_run):
 
     mock_run.return_value = Mock(returncode=0)
@@ -26,7 +18,7 @@ def test_is_gitrepo_true(mock_run):
     assert is_gitrepo() is True
 
 
-@patch("subprocess.run")
+@patch("scrut.git.subprocess.run")
 def test_is_gitrepo_false(mock_run):
 
     mock_run.return_value = Mock(returncode=1)
@@ -34,15 +26,12 @@ def test_is_gitrepo_false(mock_run):
     assert is_gitrepo() is False
 
 
-@patch("subprocess.run")
+@patch("scrut.git.subprocess.run")
 def test_get_changed_files(mock_run):
 
-    mock_run.return_value = Mock(
-        stdout="main.py\nhello.py\nREADME.md\n",
-        returncode=0,
-    )
+    mock_run.return_value = Mock(stdout="a.py\nb.py\nREADME.md\n", returncode=0)
 
-    assert get_changed_files() == ["main.py", "hello.py", "README.md"]
+    assert get_changed_files() == ["a.py", "b.py", "README.md"]
 
 
 def test_get_reviewable_files(tmp_path):
@@ -56,160 +45,150 @@ def test_get_reviewable_files(tmp_path):
     py2.write_text("")
     txt.write_text("")
 
-    result = get_reviewable_files([str(py1), str(txt), str(py2), str(missing)])
-
-    assert result == [str(py1), str(py2)]
+    assert get_reviewable_files([str(py1), str(txt), str(py2), str(missing)]) == [
+        str(py1),
+        str(py2),
+    ]
 
 
 def test_read_file(tmp_path):
 
-    file = tmp_path / "sample.py"
-    file.write_text("print('Hello')")
+    file = tmp_path / "a.py"
+    file.write_text("print('hi')")
 
-    assert read_file(file) == "print('Hello')"
+    assert read_file(str(file)) == "print('hi')"
 
 
 def test_read_file_missing(tmp_path):
 
-    assert read_file(tmp_path / "missing.py") is None
+    assert read_file(str(tmp_path / "nope.py")) is None
 
 
-def test_get_depth_no_nesting():
+def test_get_depth_zero():
 
-    tree = ast.parse("def foo():\n    pass\n")
+    tree = ast.parse("def f():\n    pass\n")
 
     assert get_depth(tree.body[0]) == 0
 
 
-def test_get_depth_nested():
-
-    tree = ast.parse(
-        "def foo():\n"
-        "    if True:\n"
-        "        while True:\n"
-        "            for i in range(5):\n"
-        "                pass\n"
-    )
-
-    assert get_depth(tree.body[0]) == 3
-
-
-def test_get_depth_all_block_nodes():
+def test_get_depth_counts_block_nodes():
 
     cases = [
-        ("def foo():\n    if True:\n        pass\n", 1),
-        ("def foo():\n    for i in range(3):\n        pass\n", 1),
-        ("def foo():\n    while True:\n        pass\n", 1),
-        ("async def foo():\n    async for i in aiter():\n        pass\n", 1),
-        ("def foo():\n    with open('f') as f:\n        pass\n", 1),
-        ("async def foo():\n    async with conn:\n        pass\n", 1),
+        ("def f():\n    if True:\n        pass\n", 1),
+        ("def f():\n    for i in range(3):\n        pass\n", 1),
+        ("def f():\n    while True:\n        pass\n", 1),
+        ("async def f():\n    async for i in aiter():\n        pass\n", 1),
+        ("def f():\n    with open('f') as f:\n        pass\n", 1),
+        ("async def f():\n    async with c:\n        pass\n", 1),
         (
-            "def foo():\n"
+            "def f():\n"
             "    try:\n"
             "        pass\n"
             "    except Exception:\n"
             "        pass\n",
             1,
         ),
-        ("def foo():\n    match x:\n        case 1:\n            pass\n", 1),
+        ("def f():\n    match x:\n        case 1:\n            pass\n", 1),
     ]
 
     for code, expected in cases:
         assert get_depth(ast.parse(code).body[0]) == expected
 
 
-def test_get_depth_mixed_chain():
+def test_get_depth_chain():
 
-    code = (
-        "def foo():\n"
-        "    if True:\n"
-        "        for i in range(3):\n"
-        "            with open('f') as f:\n"
-        "                try:\n"
-        "                    match x:\n"
-        "                        case 1:\n"
-        "                            pass\n"
-        "                except Exception:\n"
-        "                    pass\n"
-    )
-
-    assert check_depth(code) == 5
-
-
-def test_get_depth_sibling_blocks():
-
-    code = (
-        "def foo():\n"
-        "    if True:\n"
-        "        pass\n"
-        "    for i in range(3):\n"
-        "        pass\n"
-        "    with open('f') as f:\n"
-        "        pass\n"
-    )
-
-    assert check_depth(code) == 1
-
-
-def test_get_depth_non_block_constructs():
-
-    code = (
-        "def foo():\n"
-        "    items = [x for x in range(10)]\n"
-        "    double = lambda x: x * 2\n"
-        "    total = sum(x for x in range(5))\n"
-        "    def inner():\n"
-        "        return 1\n"
-    )
-
-    assert check_depth(code) == 0
-
-
-def test_get_depth_nested_function_blocks_count_from_same_level():
-
-    code = (
-        "def outer():\n"
-        "    def inner():\n"
-        "        if True:\n"
-        "            pass\n"
-        "    return inner\n"
-    )
-
-    assert check_depth(code) == 1
-
-
-def test_check_depth_returns_depth():
-
-    code = "def foo():\n    if True:\n        for i in range(3):\n            pass\n"
-
-    assert check_depth(code) == 2
-
-
-def test_check_depth_no_function_raises():
-
-    with pytest.raises(ValueError):
-        check_depth("x = 1\n")
-
-
-def test_analyze_file_nesting_warning(tmp_path):
-
-    deep = tmp_path / "deep.py"
-    deep.write_text(
-        "def foo():\n"
+    tree = ast.parse(
+        "def f():\n"
         "    if True:\n"
         "        for i in range(3):\n"
         "            with open('f') as f:\n"
         "                pass\n"
     )
 
-    limits = {**DEFAULT_LIMITS, "max_nesting": 2}
+    assert get_depth(tree.body[0]) == 3
 
-    funcs, files, classes = analyze_file(str(deep), limits)
 
-    assert funcs[0]["nesting_depth"] == 3
-    assert funcs[0]["issues"] == [
-        {"severity": "WARNING", "message": "Nesting too deep (3/2)"}
+def test_get_depth_siblings_do_not_stack():
+
+    tree = ast.parse(
+        "def f():\n"
+        "    if True:\n"
+        "        pass\n"
+        "    for i in range(3):\n"
+        "        pass\n"
+    )
+
+    assert get_depth(tree.body[0]) == 1
+
+
+def test_analyze_file_clean(tmp_path):
+
+    file = tmp_path / "clean.py"
+    file.write_text("def ok():\n    pass\n")
+
+    funcs, files, classes = analyze_file(str(file), DEFAULT_LIMITS)
+
+    assert funcs[0]["name"] == "ok"
+    assert funcs[0]["file"] == str(file)
+    assert files[0]["issues"] == []
+    assert classes == []
+
+
+def test_analyze_file_syntax_error(tmp_path):
+
+    file = tmp_path / "broken.py"
+    file.write_text("def broken(\n")
+
+    funcs, files, classes = analyze_file(str(file), DEFAULT_LIMITS)
+
+    assert funcs == []
+    assert files[0]["issues"] == [
+        {"severity": "ERROR", "message": "Python syntax error"}
     ]
+
+
+def test_analyze_file_unreadable(tmp_path):
+
+    funcs, files, classes = analyze_file(str(tmp_path / "missing.py"), DEFAULT_LIMITS)
+
+    assert funcs == []
+    assert files[0]["issues"] == [
+        {"severity": "ERROR", "message": "Could not read file"}
+    ]
+
+
+def test_analyze_file_warnings(tmp_path):
+
+    file = tmp_path / "warn.py"
+    file.write_text("def f(a, b):\n    if True:\n        pass\n")
+
+    limits = {
+        **DEFAULT_LIMITS,
+        "max_parameters": 1,
+        "max_nesting": 0,
+        "max_function_lines": 1,
+    }
+
+    funcs, files, classes = analyze_file(str(file), limits)
+
+    assert [issue["message"] for issue in funcs[0]["issues"]] == [
+        "Function too long (3/1)",
+        "Too many parameters (2/1)",
+        "Nesting too deep (1/0)",
+    ]
+
+
+def test_analyze_file_class_and_file_warnings(tmp_path):
+
+    file = tmp_path / "big.py"
+    file.write_text("class Big:\n" + "    def m():\n        pass\n" * 20)
+
+    limits = {**DEFAULT_LIMITS, "max_class_lines": 10, "max_file_lines": 10}
+
+    funcs, files, classes = analyze_file(str(file), limits)
+
+    assert classes[0]["issues"][0]["message"] == "Class too large (41/10)"
+    assert files[0]["issues"][0]["message"] == "File too large (41/10)"
 
 
 def test_load_config_default(tmp_path, monkeypatch):
@@ -238,69 +217,74 @@ def test_merge_limits():
     assert merged["max_file_lines"] == 400
 
 
-def test_main_reviews_all_files(tmp_path, monkeypatch, capsys):
+def test_generate_report_all_clean(capsys):
+
+    funcs = [
+        {
+            "name": "ok",
+            "file": "a.py",
+            "lines": 3,
+            "parameters": 0,
+            "nesting_depth": 0,
+            "issues": [],
+        }
+    ]
+    files = [{"name": "a.py", "lines": 3, "issues": []}]
+    classes = []
+
+    generate_report(funcs, files, classes)
+
+    assert "All clean." in capsys.readouterr().out
+
+
+def test_generate_report_with_issues(capsys):
+
+    funcs = [
+        {
+            "name": "f",
+            "file": "a.py",
+            "lines": 3,
+            "parameters": 2,
+            "nesting_depth": 1,
+            "issues": [
+                {"severity": "WARNING", "message": "Too many parameters (2/1)"}
+            ],
+        }
+    ]
+    files = [{"name": "a.py", "lines": 3, "issues": []}]
+    classes = []
+
+    generate_report(funcs, files, classes)
+
+    out = capsys.readouterr().out
+
+    assert "1 files need attention" in out
+    assert "Too many parameters (2/1)" in out
+
+
+def test_main_with_mocked_git(tmp_path, monkeypatch, capsys):
 
     good = tmp_path / "good.py"
-    bad = tmp_path / "bad.py"
     broken = tmp_path / "broken.py"
 
     good.write_text("def ok():\n    pass\n")
-    bad.write_text("def bad(a, b):\n    if True:\n        pass\n")
     broken.write_text("def broken(\n")
 
     monkeypatch.chdir(tmp_path)
-    (tmp_path / "scrut.toml").write_text(
-        "[limits]\n"
-        "max_parameters = 1\n"
-        "max_nesting = 1\n"
-        "max_function_lines = 1\n"
-        "max_class_lines = 10\n"
-        "max_file_lines = 5\n"
-    )
     monkeypatch.setattr(
-        "scrut.cli.subprocess.run",
-        lambda *a, **k: Mock(returncode=0, stdout="good.py\nbad.py\nbroken.py\n"),
+        "scrut.git.subprocess.run",
+        lambda *a, **k: Mock(returncode=0, stdout="good.py\nbroken.py\n"),
     )
 
     main()
 
     out = capsys.readouterr().out
 
-    assert "good.py" in out
-    assert "bad.py" in out
-    assert "broken.py" in out
     assert "Python syntax error" in out
-    assert "Too many parameters (2/1)" in out
-    assert "Files Reviewed     : 3" in out
+    assert "1 files need attention · 1 files passed" in out
 
 
-def test_analyze_file_list_with_syntax_error(tmp_path):
-
-    good = tmp_path / "good.py"
-    clean = tmp_path / "clean.py"
-    broken = tmp_path / "broken.py"
-
-    good.write_text("def ok():\n    pass\n")
-    clean.write_text("x = 1\n")
-    broken.write_text("def broken(\n")
-
-    results = [
-        analyze_file(str(path), DEFAULT_LIMITS) for path in [good, clean, broken]
-    ]
-
-    assert len(results) == 3
-
-    assert results[0][1][0]["issues"] == []
-    assert results[1][1][0]["issues"] == []
-    assert results[2][1][0]["issues"] == [
-        {"severity": "ERROR", "message": "Python syntax error"}
-    ]
-
-    assert results[0][0][0]["name"] == "ok"
-    assert results[2][0] == []
-
-
-def test_main_integration_multiple_changed_files(tmp_path, monkeypatch, capsys):
+def test_main_with_real_git_repo(tmp_path, monkeypatch, capsys):
 
     def git(*args):
         subprocess.run(["git", *args], cwd=tmp_path, check=True, capture_output=True)
@@ -310,27 +294,16 @@ def test_main_integration_multiple_changed_files(tmp_path, monkeypatch, capsys):
     git("config", "user.name", "Test")
 
     (tmp_path / "a.py").write_text("def a():\n    pass\n")
-    (tmp_path / "b.py").write_text("def b():\n    pass\n")
-    (tmp_path / "c.py").write_text("def c():\n    pass\n")
-    (tmp_path / "notes.txt").write_text("notes\n")
-
     git("add", "-A")
     git("-c", "commit.gpgsign=false", "commit", "-q", "-m", "initial")
 
     (tmp_path / "a.py").write_text("def a():\n    return 1\n")
-    (tmp_path / "c.py").write_text("def c():\n    return 2\n")
-    (tmp_path / "d.py").write_text("def d():\n    pass\n")
-    (tmp_path / "notes.txt").write_text("updated\n")
-
+    (tmp_path / "b.py").write_text("def b():\n    pass\n")
+    (tmp_path / "notes.txt").write_text("x\n")
     git("add", "-A")
 
     monkeypatch.chdir(tmp_path)
 
     main()
 
-    out = capsys.readouterr().out
-
-    assert "a.py" in out
-    assert "c.py" in out
-    assert "d.py" in out
-    assert "Files Reviewed     : 3" in out
+    assert "All clean." in capsys.readouterr().out

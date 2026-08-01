@@ -103,6 +103,7 @@ def analyze_file(file_path, limits):
             funcs.append(
                 {
                     "name": node.name,
+                    "file": file_path,
                     "lines": line_count,
                     "parameters": param_count,
                     "nesting_depth": nesting_depth,
@@ -122,7 +123,14 @@ def analyze_file(file_path, limits):
                     }
                 )
 
-            cls.append({"name": node.name, "lines": class_line_count, "issues": issues})
+            cls.append(
+                {
+                    "name": node.name,
+                    "file": file_path,
+                    "lines": class_line_count,
+                    "issues": issues,
+                }
+            )
 
     file_line_count = len(source_code.splitlines())
     file_issues = []
