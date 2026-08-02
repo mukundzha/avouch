@@ -1,6 +1,7 @@
 from scrut.rules.complexity import calculate_complexity
 from scrut.rules.boolean_complexity import analyze as analyze_boolean_complexity
 from scrut.rules.bare_except import analyze as analyze_bare_except 
+from scrut.rules.empty_except import analyze as analyze_empty_except 
 import ast
 
 BLOCK_NODES = (
@@ -105,7 +106,7 @@ def analyze_file(file_path, limits):
                     }
                 )
 
-            issues.extend(analyze_bare_except(node, limits))
+            issues.extend(analyze_empty_except(node, limits))
 
             if nesting_depth > limits["max_nesting"]:
                 issues.append(
@@ -157,6 +158,8 @@ def analyze_file(file_path, limits):
                     "issues": issues,
                 }
             )
+
+            issues.extend(analyze_empty_except(node, limits))
 
     file_line_count = len(source_code.splitlines())
     file_issues = []
