@@ -5,3 +5,4 @@ max_function_lines = 50
 max_class_lines = 50
 max_file_lines = 50
 max_complexity = 10
+max_boolean_conditions = 6

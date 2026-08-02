@@ -9,6 +9,7 @@ from scrut.cli import main
 from scrut.config.default import DEFAULT_LIMITS
 from scrut.config.loader import load_config, merge_limits
 from scrut.rules.complexity import calculate_complexity
+from scrut.rules.boolean_complexity import analyze, count_boolean_conditions
 
 
 @patch("scrut.git.subprocess.run")
@@ -125,6 +126,32 @@ def test_get_depth_siblings_do_not_stack():
 def test_default_limits_include_complexity():
 
     assert DEFAULT_LIMITS["max_complexity"] == 10
+    assert DEFAULT_LIMITS["max_boolean_conditions"] == 5
+
+
+def test_count_boolean_conditions():
+
+    cases = [
+        ("if a:\n    pass\n", 0),
+        ("if a and b:\n    pass\n", 2),
+        ("if a and b and c:\n    pass\n", 3),
+        ("if a and (b or c):\n    pass\n", 3),
+        ("if not a:\n    pass\n", 0),
+    ]
+
+    for source, expected in cases:
+
+        tree = ast.parse("def f():\n    " + source.replace("\n", "\n    "))
+
+        boolean_count = 0
+
+        for node in ast.walk(tree):
+
+            if isinstance(node, ast.BoolOp):
+                boolean_count = count_boolean_conditions(node)
+                break
+
+        assert boolean_count == expected
 
 
 def test_calculate_complexity_flat():
@@ -209,6 +236,42 @@ def test_analyze_file_class_complexity(tmp_path):
     funcs, files, classes = analyze_file(str(file), DEFAULT_LIMITS)
 
     assert classes[0]["issues"][0]["message"] == "Class too complex (11/10)"
+
+
+def test_analyze_file_boolean_complexity_at_limit(tmp_path):
+
+    body = "if a and b and c and d and e:\n    pass\n"
+    file = tmp_path / "a.py"
+    file.write_text("def f(x):\n    " + body.replace("\n", "\n    "))
+
+    funcs, files, classes = analyze_file(str(file), DEFAULT_LIMITS)
+
+    assert not any(
+        "Boolean expression" in issue["message"]
+        for issue in funcs[0]["issues"]
+    )
+
+
+def test_analyze_file_boolean_complexity_over_limit(tmp_path):
+
+    body = "if a and b and c and d and e and f:\n    pass\n"
+    file = tmp_path / "a.py"
+    file.write_text("def f(x):\n    " + body.replace("\n", "\n    "))
+
+    funcs, files, classes = analyze_file(str(file), DEFAULT_LIMITS)
+
+    assert funcs[0]["issues"][0]["message"] == "Boolean expression too complex (6/5)"
+
+
+def test_analyze_file_boolean_complexity_class(tmp_path):
+
+    body = "if a and b and c and d and e and f:\n    pass\n"
+    file = tmp_path / "a.py"
+    file.write_text("class C:\n    def m(self):\n        " + body.replace("\n", "\n        "))
+
+    funcs, files, classes = analyze_file(str(file), DEFAULT_LIMITS)
+
+    assert classes[0]["issues"][0]["message"] == "Boolean expression too complex (6/5)"
 
 
 def test_analyze_file_clean(tmp_path):

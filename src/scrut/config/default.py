@@ -9,4 +9,5 @@ DEFAULT_LIMITS = {
     "max_class_lines": 200,
     "max_file_lines": 400,
     "max_complexity": 10,
+    "max_boolean_conditions" : 5,
 }

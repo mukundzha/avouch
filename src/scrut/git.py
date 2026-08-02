@@ -15,6 +15,7 @@ def get_changed_files():
 
 
 def get_reviewable_files(files):
+    
     reviewable = []
 
     for file in files:

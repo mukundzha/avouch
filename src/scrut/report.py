@@ -1,62 +1,114 @@
-from scrut.rules.complexity import calculate_complexity
 import sys
 
 _USE_COLOR = sys.stdout.isatty()
 
 
+def generate_report(function_reports, file_reports, class_reports):
+    render_report(function_reports, file_reports, class_reports)
+
+
 def render_report(function_reports, file_reports, class_reports):
 
-    issues = {}
+    reports = []
+    reports.extend(class_reports)
+    reports.extend(function_reports)
+    reports.extend(file_reports)
+    issues_by_file = {}
 
-    for report in [*class_reports, *function_reports, *file_reports]:
 
-        file = report.get("file", report["name"])
+    for report in reports:
 
-        if not report["issues"]:
+        if len(report["issues"]) == 0:
             continue
 
         if "file" in report:
-            name = report["name"] + ("()" if "parameters" in report else "")
+            file_name = report["file"]
+
+            if "parameters" in report:
+                item_name = report["name"] + "()"
+            else:
+                item_name = report["name"]
+
         else:
-            name = "file"
+            file_name = report["name"]
+            item_name = "file"
+
+        if file_name not in issues_by_file:
+            issues_by_file[file_name] = []
 
         for issue in report["issues"]:
-            issues.setdefault(file, []).append(
-                (name, issue["message"], issue["severity"])
+
+            issues_by_file[file_name].append(
+                (
+                    item_name,
+                    issue["message"],
+                    issue["severity"],
+                )
             )
 
-    if not issues:
+    if len(issues_by_file) == 0:
         print(_style("✓ All clean.", 32))
         return
 
-    passed = len(file_reports) - len(issues)
+    total_files = len(file_reports)
+    files_with_issues = len(issues_by_file)
+    passed_files = total_files - files_with_issues
 
-    print("")
-    print(_style("SCRUT", 1) + _style(" [Review Summary] ", 2))
+
+    render_summary(files_with_issues, passed_files)
+
+    for file_name in sorted(issues_by_file):
+
+        render_file(file_name, issues_by_file[file_name])
+
     print()
-    print(
-        _style(str(len(issues)), 33)
-        + _style(" file(s) need attention · ", 0)
-        + _style(str(passed), 32)
-        + _style(" file(s) passed", 0)
+
+    if passed_files > 0:
+        print(_style(f"✓ {passed_files} compliant files hidden", 32))
+
+
+def render_summary(files_with_issues, passed_files):
+
+    print()
+    print(_style("SCRUT", 1) + _style(" [Review Summary]", 2))
+    print()
+
+    if passed_files > 0:
+     print(
+        _style(str(files_with_issues), 33)
+        + " file(s) need attention · "
+        + _style(str(passed_files), 32)
+        + " file(s) passed"
+    )
+    else:
+     print(
+        _style(str(files_with_issues), 33)
+        + " file(s) need attention"
     )
     print()
 
-    for file, items in sorted(issues.items()):
 
-        print(_style(file, 1, 36))
+def render_file(file_name, issues):
 
-        for name, message, severity in items:
-            icon, color = ("✖", 31) if severity == "ERROR" else ("⚠", 33)
-            print(
-                f"  {_style(icon, color)} "
-                f"{_style(name, 1)} {_style('—', 2)} {_style(message, color)}"
-            )
+    print(_style(file_name, 1, 36))
+
+    for item_name, message, severity in issues:
+
+        if severity == "ERROR":
+            icon = "✖"
+            color = 31
+        else:
+            icon = "⚠"
+            color = 33
+
+        print(
+            f"  {_style(icon, color)} "
+            f"{_style(item_name, 1)} "
+            f"{_style('—', 2)} "
+            f"{_style(message, color)}"
+        )
 
     print()
-
-    if passed:
-        print(_style(f"✓ {passed} compliant files hidden", 32))
 
 
 def _style(text, *codes):
@@ -64,8 +116,5 @@ def _style(text, *codes):
     if not _USE_COLOR:
         return text
 
-    return f"\033[{';'.join(str(code) for code in codes)}m{text}\033[0m"
-
-
-def generate_report(function_reports, file_reports, class_reports):
-    render_report(function_reports, file_reports, class_reports)
+    code = ";".join(str(value) for value in codes)
+    return f"\033[{code}m{text}\033[0m"

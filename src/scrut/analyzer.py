@@ -1,4 +1,5 @@
 from scrut.rules.complexity import calculate_complexity
+from scrut.rules.boolean_complexity import analyze as analyze_boolean_complexity
 import ast
 
 BLOCK_NODES = (
@@ -93,6 +94,8 @@ def analyze_file(file_path, limits):
                     }
                 )
 
+            issues.extend(analyze_boolean_complexity(node, limits))
+
             if param_count > limits["max_parameters"]:
                 issues.append(
                     {
@@ -140,6 +143,8 @@ def analyze_file(file_path, limits):
                         "message": f"Class too complex ({complexity}/{limits['max_complexity']})",
                     }
                 )
+
+            issues.extend(analyze_boolean_complexity(node, limits))
 
             cls.append(
                 {
