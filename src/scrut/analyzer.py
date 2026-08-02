@@ -1,5 +1,6 @@
 from scrut.rules.complexity import calculate_complexity
 from scrut.rules.boolean_complexity import analyze as analyze_boolean_complexity
+from scrut.rules.detect_duplicateb import analyze as analyze_duplicateb 
 from scrut.rules.bare_except import analyze as analyze_bare_except 
 from scrut.rules.empty_except import analyze as analyze_empty_except 
 import ast
@@ -126,6 +127,8 @@ def analyze_file(file_path, limits):
                     "issues": issues,
                 }
             )
+
+            issues.extend(analyze_duplicateb(node, limits))
 
         elif isinstance(node, ast.ClassDef):
             issues = []
