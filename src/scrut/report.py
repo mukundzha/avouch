@@ -1,3 +1,4 @@
+from scrut.rules.complexity import calculate_complexity
 import sys
 
 _USE_COLOR = sys.stdout.isatty()

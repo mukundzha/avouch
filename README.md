@@ -147,6 +147,7 @@ defaults:
 | `max_function_lines` | 50 | 50 |
 | `max_class_lines` | 200 | 50 |
 | `max_file_lines` | 400 | 50 |
+| `max_complexity` | 10 | 15 |
 
 ```toml
 # scrut.toml — any subset is valid
@@ -166,6 +167,7 @@ max_nesting         = 5
 max_function_lines  = 50
 max_class_lines     = 50
 max_file_lines      = 50
+max_complexity      = 15
 ```
 
 Two documented constraints: the file is resolved from the current working
@@ -176,7 +178,7 @@ raises rather than being silently ignored.
 
 ## Rules: what scrut checks
 
-Five structural rules, each emitting a `WARNING` that embeds the measured
+Six structural rules, each emitting a `WARNING` that embeds the measured
 value and the limit, so every line of the report is self-explanatory
 without context:
 
@@ -187,6 +189,17 @@ without context:
 | Nesting depth | `Nesting too deep (N/limit)` | 4 levels |
 | Class size | `Class too large (N/limit)` | 200 lines |
 | File size | `File too large (N/limit)` | 400 lines |
+| Complexity | `Function too complex (N/limit)` | 10 |
+
+### Complexity: McCabe cyclomatic
+
+`calculate_complexity()` counts decision points the way McCabe intended:
+base 1, then +1 for every `if`/`elif`, ternary, `for`, `while`, each
+`try`, each `except` handler, each `match` case, and each operand of an
+`and`/`or` chain. A nested function's decisions belong to the nested
+function, never the enclosing one. A class's complexity is the sum over
+its methods — `Class too complex` fires when the whole class body is
+over the limit.
 
 ### Nesting: maximum depth, not block count
 
@@ -218,14 +231,14 @@ findings render with a red `✖`; warnings with a yellow `⚠`.
 
 ## Architecture
 
-The codebase is deliberately small: six modules, one entry point, no
+The codebase is deliberately small: seven modules, one entry point, no
 dependencies. The governing rule is that **`cli.py` only orchestrates** —
 every function it calls lives in another module, and nothing imports
-`cli.py`. That is what keeps all 22 tests fast and mock-light.
+`cli.py`. That is what keeps all 30 tests fast and mock-light.
 
 ```mermaid
 flowchart LR
-    G[git.py<br/>review set: git diff HEAD] --> A[analyzer.py<br/>AST · five rules]
+    G[git.py<br/>review set: git diff HEAD] --> A[analyzer.py<br/>AST · six rules]
     C[config<br/>scrut.toml + defaults] --> A
     A --> R[report.py<br/>colored report]
 ```
@@ -235,6 +248,7 @@ flowchart LR
 | `cli.py` | Pipeline wiring | `main()` |
 | `git.py` | Git interaction | `is_gitrepo`, `get_changed_files`, `get_reviewable_files` |
 | `analyzer.py` | AST analysis | `BLOCK_NODES`, `read_file`, `get_depth`, `analyze_file` |
+| `rules/complexity.py` | Cyclomatic complexity | `calculate_complexity` |
 | `report.py` | Output rendering | `render_report`, `generate_report` |
 | `config/default.py` | Default limits | `DEFAULT_LIMITS` |
 | `config/loader.py` | TOML loading + merge | `load_config`, `merge_limits` |
@@ -249,12 +263,14 @@ scrut/
 │   ├── cli.py              # entry point; orchestration only
 │   ├── git.py              # is_gitrepo, get_changed_files, get_reviewable_files
 │   ├── analyzer.py         # BLOCK_NODES, read_file, get_depth, analyze_file
+│   ├── rules/
+│   │   └── complexity.py   # calculate_complexity (McCabe)
 │   ├── report.py           # render_report, generate_report
 │   └── config/
 │       ├── default.py      # DEFAULT_LIMITS
 │       └── loader.py       # load_config, merge_limits
 └── tests/
-    └── test_git.py         # 22 tests
+    └── test_git.py         # 30 tests
 ```
 
 ---
@@ -272,18 +288,18 @@ python -m pytest tests/
 
 ### The test suite
 
-All 22 tests run in a fraction of a second, with no network and no package
+All 30 tests run in a fraction of a second, with no network and no package
 installs. Coverage includes the git helpers, config merging, all eight
-nesting block types, every analysis failure path, report output, and an
-end-to-end run against a **real temporary git repository** — Git itself is
-not mocked. Mocking is limited to `subprocess.run` where a real Git isn't
-needed.
+nesting block types, every complexity decision point, every analysis
+failure path, report output, and an end-to-end run against a **real
+temporary git repository** — Git itself is not mocked. Mocking is limited
+to `subprocess.run` where a real Git isn't needed.
 
 ### Conventions
 
 - **Tests before code.** A fix that cannot be expressed as a failing test
   first is not a fix yet.
-- **Keep the diff small.** This codebase has six modules for a reason.
+- **Keep the diff small.** This codebase has seven modules for a reason.
   A change that touches more than two of them needs a justification in the
   PR description.
 - **Zero dependencies is the contract.** No new runtime dependencies
@@ -294,10 +310,12 @@ needed.
 
 ### Adding a rule
 
-A new rule is a few lines inside the `analyze_file` walk plus a default in
-`DEFAULT_LIMITS` (or a `scrut.toml` key). The renderer displays any
-`(severity, message)` pair it receives, so no report code changes. Write
-the test first: one for the violation, one for the boundary.
+A rule is a few lines inside the `analyze_file` walk plus a default in
+`DEFAULT_LIMITS` (or a `scrut.toml` key); a rule with real measurement
+logic, like cyclomatic complexity, lives in `scrut/rules/`. The renderer
+displays any `(severity, message)` pair it receives, so no report code
+changes. Write the test first: one for the violation, one for the
+boundary.
 
 ---
 
@@ -322,8 +340,8 @@ Informed by the documented limitations, ordered by the pain they remove:
 - Configurable exit codes, so enforcement is possible without changing
   scrut's review-only default
 
-The five-rule ceiling is raised deliberately, not by accretion; each new
-rule must survive the philosophy section.
+The rule ceiling is raised deliberately, not by accretion; each new rule
+must survive the philosophy section.
 
 ---
 

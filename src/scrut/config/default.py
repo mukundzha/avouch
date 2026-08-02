@@ -8,4 +8,5 @@ DEFAULT_LIMITS = {
     "max_function_lines": 50,
     "max_class_lines": 200,
     "max_file_lines": 400,
+    "max_complexity": 10,
 }

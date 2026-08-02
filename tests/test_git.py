@@ -8,6 +8,7 @@ from scrut.report import generate_report
 from scrut.cli import main
 from scrut.config.default import DEFAULT_LIMITS
 from scrut.config.loader import load_config, merge_limits
+from scrut.rules.complexity import calculate_complexity
 
 
 @patch("scrut.git.subprocess.run")
@@ -119,6 +120,95 @@ def test_get_depth_siblings_do_not_stack():
     )
 
     assert get_depth(tree.body[0]) == 1
+
+
+def test_default_limits_include_complexity():
+
+    assert DEFAULT_LIMITS["max_complexity"] == 10
+
+
+def test_calculate_complexity_flat():
+
+    tree = ast.parse("def f():\n    pass\n")
+
+    assert calculate_complexity(tree.body[0]) == 1
+
+
+def test_calculate_complexity_counts_decisions():
+
+    cases = [
+        ("def f():\n    if a:\n        pass\n", 2),
+        ("def f():\n    if a:\n        pass\n    elif b:\n        pass\n", 3),
+        ("def f():\n    for i in r:\n        pass\n", 2),
+        ("def f():\n    while a:\n        pass\n", 2),
+        ("def f():\n    try:\n        pass\n    except:\n        pass\n", 3),
+        ("def f():\n    return a if b else c\n", 2),
+        ("def f():\n    if a and b:\n        pass\n", 3),
+        ("def f():\n    return a and b or c\n", 3),
+        (
+            "def f():\n"
+            "    match x:\n"
+            "        case 1:\n            pass\n"
+            "        case 2:\n            pass\n"
+            "        case _:\n            pass\n",
+            4,
+        ),
+    ]
+
+    for source, expected in cases:
+
+        tree = ast.parse(source)
+
+        assert calculate_complexity(tree.body[0]) == expected
+
+
+def test_calculate_complexity_excludes_nested_defs():
+
+    source = "def outer():\n    def inner():\n        if a:\n            pass\n"
+    tree = ast.parse(source)
+
+    assert calculate_complexity(tree.body[0]) == 1
+
+
+def test_calculate_complexity_includes_class_methods():
+
+    source = "class C:\n    def m(self):\n        if a:\n            pass\n"
+    tree = ast.parse(source)
+
+    assert calculate_complexity(tree.body[0]) == 2
+
+
+def test_analyze_file_complexity_at_limit(tmp_path):
+
+    body = "".join(f"    if x{i}:\n        pass\n" for i in range(9))
+    file = tmp_path / "a.py"
+    file.write_text("def f(x):\n" + body)
+
+    funcs, files, classes = analyze_file(str(file), DEFAULT_LIMITS)
+
+    assert funcs[0]["issues"] == []
+
+
+def test_analyze_file_complexity_over_limit(tmp_path):
+
+    body = "".join(f"    if x{i}:\n        pass\n" for i in range(10))
+    file = tmp_path / "a.py"
+    file.write_text("def f(x):\n" + body)
+
+    funcs, files, classes = analyze_file(str(file), DEFAULT_LIMITS)
+
+    assert funcs[0]["issues"][0]["message"] == "Function too complex (11/10)"
+
+
+def test_analyze_file_class_complexity(tmp_path):
+
+    source = "class C:\n" + "".join(f"    def m{i}(self):\n        if x:\n            pass\n" for i in range(10))
+    file = tmp_path / "a.py"
+    file.write_text(source)
+
+    funcs, files, classes = analyze_file(str(file), DEFAULT_LIMITS)
+
+    assert classes[0]["issues"][0]["message"] == "Class too complex (11/10)"
 
 
 def test_analyze_file_clean(tmp_path):

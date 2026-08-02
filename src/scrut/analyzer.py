@@ -1,11 +1,11 @@
-
+from scrut.rules.complexity import calculate_complexity
 import ast
 
 BLOCK_NODES = (
     ast.If,
     ast.For,
-    ast.While,
     ast.AsyncFor,
+    ast.While,
     ast.With,
     ast.AsyncWith,
     ast.Try,
@@ -75,12 +75,21 @@ def analyze_file(file_path, limits):
             line_count = node.end_lineno - node.lineno + 1
             param_count = len(node.args.args)
             nesting_depth = get_depth(node)
+            complexity = calculate_complexity(node)
 
             if line_count > limits["max_function_lines"]:
                 issues.append(
                     {
                         "severity": "WARNING",
                         "message": f"Function too long ({line_count}/{limits['max_function_lines']})",
+                    }
+                )
+
+            if complexity > limits["max_complexity"]:
+                issues.append(
+                    {
+                        "severity": "WARNING",
+                        "message": f"Function too complex ({complexity}/{limits['max_complexity']})",
                     }
                 )
 
@@ -114,12 +123,21 @@ def analyze_file(file_path, limits):
         elif isinstance(node, ast.ClassDef):
             issues = []
             class_line_count = node.end_lineno - node.lineno + 1
+            complexity = calculate_complexity(node)
 
             if class_line_count > limits["max_class_lines"]:
                 issues.append(
                     {
                         "severity": "WARNING",
                         "message": f"Class too large ({class_line_count}/{limits['max_class_lines']})",
+                    }
+                )
+
+            if complexity > limits["max_complexity"]:
+                issues.append(
+                    {
+                        "severity": "WARNING",
+                        "message": f"Class too complex ({complexity}/{limits['max_complexity']})",
                     }
                 )
 
