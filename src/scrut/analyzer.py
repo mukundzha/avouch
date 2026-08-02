@@ -1,5 +1,6 @@
 from scrut.rules.complexity import calculate_complexity
 from scrut.rules.boolean_complexity import analyze as analyze_boolean_complexity
+from scrut.rules.bare_except import analyze as analyze_bare_except 
 import ast
 
 BLOCK_NODES = (
@@ -103,6 +104,8 @@ def analyze_file(file_path, limits):
                         "message": f"Too many parameters ({param_count}/{limits['max_parameters']})",
                     }
                 )
+
+            issues.extend(analyze_bare_except(node, limits))
 
             if nesting_depth > limits["max_nesting"]:
                 issues.append(

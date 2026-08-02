@@ -96,9 +96,7 @@ dev@scrut-demo:~/repo$ scrut
 ![scrut reporting two findings on a changed file](images/scrut-findings.png)
 
 ```text
-SCRUT [Review Summary]
-
-1 file(s) need attention · 0 file(s) passed
+SCRUT [Review Summary] — 1 file(s) need attention
 
 app.py
   ⚠ handle_request() — Too many parameters (7/4)
@@ -147,7 +145,8 @@ defaults:
 | `max_function_lines` | 50 | 50 |
 | `max_class_lines` | 200 | 50 |
 | `max_file_lines` | 400 | 50 |
-| `max_complexity` | 10 | 15 |
+| `max_complexity` | 10 | 10 |
+| `max_boolean_conditions` | 5 | 5 |
 
 ```toml
 # scrut.toml — any subset is valid
@@ -167,7 +166,7 @@ max_nesting         = 5
 max_function_lines  = 50
 max_class_lines     = 50
 max_file_lines      = 50
-max_complexity      = 15
+max_complexity      = 10
 ```
 
 Two documented constraints: the file is resolved from the current working
@@ -178,9 +177,9 @@ raises rather than being silently ignored.
 
 ## Rules: what scrut checks
 
-Six structural rules, each emitting a `WARNING` that embeds the measured
-value and the limit, so every line of the report is self-explanatory
-without context:
+Eight rules, each emitting a `WARNING`. All but the bare-except rule embed
+the measured value and the limit, so every line of the report is
+self-explanatory without context:
 
 | Rule | Message format | Default |
 |---|---|---|
@@ -190,16 +189,32 @@ without context:
 | Class size | `Class too large (N/limit)` | 200 lines |
 | File size | `File too large (N/limit)` | 400 lines |
 | Complexity | `Function too complex (N/limit)` | 10 |
+| Boolean complexity | `Boolean expression too complex (N/limit)` | 5 |
+| Bare except | `Bare except catches every exception. Catch a specific exception instead.` | none |
 
 ### Complexity: McCabe cyclomatic
 
 `calculate_complexity()` counts decision points the way McCabe intended:
-base 1, then +1 for every `if`/`elif`, ternary, `for`, `while`, each
-`try`, each `except` handler, each `match` case, and each operand of an
-`and`/`or` chain. A nested function's decisions belong to the nested
-function, never the enclosing one. A class's complexity is the sum over
-its methods — `Class too complex` fires when the whole class body is
-over the limit.
+base 1, then +1 for every `if`/`elif`, ternary, `for`, `while`, `with`,
+`assert`, `try`, each `except` handler, each `match`, and each `and`/`or`
+chain. The count is a walk over the whole subtree: decisions inside a
+nested function count toward the enclosing one, and a class's complexity
+is the sum over its entire body, methods included — `Class too complex`
+fires when the whole class is over the limit.
+
+### Boolean expressions: operand count per chain
+
+`count_boolean_conditions()` measures a single `and`/`or` chain: every
+operand contributes 1 and nested chains sum their operands, so `a and b`
+scores 2 and `a and (b or c)` scores 3. `Boolean expression too complex
+(N/limit)` fires when any chain exceeds `max_boolean_conditions` (default
+5). Functions and classes are both checked.
+
+### Bare except
+
+`analyze_bare_except()` walks a function and flags every `except:` handler
+that catches nothing specific. There is no limit to configure: the rule is
+binary and applies to every function, including methods.
 
 ### Nesting: maximum depth, not block count
 
@@ -231,14 +246,14 @@ findings render with a red `✖`; warnings with a yellow `⚠`.
 
 ## Architecture
 
-The codebase is deliberately small: seven modules, one entry point, no
+The codebase is deliberately small: nine modules, one entry point, no
 dependencies. The governing rule is that **`cli.py` only orchestrates** —
 every function it calls lives in another module, and nothing imports
-`cli.py`. That is what keeps all 30 tests fast and mock-light.
+`cli.py`. That is what keeps all 34 tests fast and mock-light.
 
 ```mermaid
 flowchart LR
-    G[git.py<br/>review set: git diff HEAD] --> A[analyzer.py<br/>AST · six rules]
+    G[git.py<br/>review set: git diff HEAD] --> A[analyzer.py<br/>AST · eight rules]
     C[config<br/>scrut.toml + defaults] --> A
     A --> R[report.py<br/>colored report]
 ```
@@ -249,6 +264,8 @@ flowchart LR
 | `git.py` | Git interaction | `is_gitrepo`, `get_changed_files`, `get_reviewable_files` |
 | `analyzer.py` | AST analysis | `BLOCK_NODES`, `read_file`, `get_depth`, `analyze_file` |
 | `rules/complexity.py` | Cyclomatic complexity | `calculate_complexity` |
+| `rules/boolean_complexity.py` | Boolean-chain measurement | `analyze`, `count_boolean_conditions` |
+| `rules/bare_except.py` | Bare-except detection | `analyze` |
 | `report.py` | Output rendering | `render_report`, `generate_report` |
 | `config/default.py` | Default limits | `DEFAULT_LIMITS` |
 | `config/loader.py` | TOML loading + merge | `load_config`, `merge_limits` |
@@ -259,18 +276,21 @@ flowchart LR
 scrut/
 ├── pyproject.toml          # packaging, entry point, pytest config
 ├── scrut.toml              # limits this repo lives by
+├── cx-demo/                # scratch demos for end-to-end runs
 ├── src/scrut/
 │   ├── cli.py              # entry point; orchestration only
 │   ├── git.py              # is_gitrepo, get_changed_files, get_reviewable_files
 │   ├── analyzer.py         # BLOCK_NODES, read_file, get_depth, analyze_file
 │   ├── rules/
-│   │   └── complexity.py   # calculate_complexity (McCabe)
+│   │   ├── complexity.py        # calculate_complexity (McCabe)
+│   │   ├── boolean_complexity.py  # analyze, count_boolean_conditions
+│   │   └── bare_except.py       # analyze
 │   ├── report.py           # render_report, generate_report
 │   └── config/
 │       ├── default.py      # DEFAULT_LIMITS
 │       └── loader.py       # load_config, merge_limits
 └── tests/
-    └── test_git.py         # 30 tests
+    └── test_git.py         # 34 tests
 ```
 
 ---
@@ -288,18 +308,22 @@ python -m pytest tests/
 
 ### The test suite
 
-All 30 tests run in a fraction of a second, with no network and no package
-installs. Coverage includes the git helpers, config merging, all eight
-nesting block types, every complexity decision point, every analysis
-failure path, report output, and an end-to-end run against a **real
-temporary git repository** — Git itself is not mocked. Mocking is limited
-to `subprocess.run` where a real Git isn't needed.
+All 34 tests run in a fraction of a second, with no network and no package
+installs; 32 pass today. Two complexity tests still encode the previous
+pruned traversal (nested `def`s excluded, one point per `match` case) and
+await realignment with the current walk-based metric. Coverage includes
+the git helpers, config merging, all eight nesting block types, every
+complexity decision point, boolean-chain measurement, bare-except
+detection, every analysis failure path, report output, and an end-to-end
+run against a **real temporary git repository** — Git itself is not
+mocked. Mocking is limited to `subprocess.run` where a real Git isn't
+needed.
 
 ### Conventions
 
 - **Tests before code.** A fix that cannot be expressed as a failing test
   first is not a fix yet.
-- **Keep the diff small.** This codebase has seven modules for a reason.
+- **Keep the diff small.** This codebase has nine modules for a reason.
   A change that touches more than two of them needs a justification in the
   PR description.
 - **Zero dependencies is the contract.** No new runtime dependencies
@@ -311,11 +335,12 @@ to `subprocess.run` where a real Git isn't needed.
 ### Adding a rule
 
 A rule is a few lines inside the `analyze_file` walk plus a default in
-`DEFAULT_LIMITS` (or a `scrut.toml` key); a rule with real measurement
-logic, like cyclomatic complexity, lives in `scrut/rules/`. The renderer
-displays any `(severity, message)` pair it receives, so no report code
-changes. Write the test first: one for the violation, one for the
-boundary.
+`DEFAULT_LIMITS` (or a `scrut.toml` key). Rules with real measurement
+logic live in `scrut/rules/` behind an `analyze(node, limits)` signature —
+cyclomatic complexity, boolean-chain measurement, and bare-except
+detection all follow it. The renderer displays any `(severity, message)`
+pair it receives, so no report code changes. Write the test first: one
+for the violation, one for the boundary.
 
 ---
 
