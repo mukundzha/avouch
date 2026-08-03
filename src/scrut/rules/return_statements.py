@@ -1,0 +1,26 @@
+import ast
+
+def analyze(function_node, limits):
+    issues = []
+    return_count = 0
+
+    limit = limits.get("max_return_statements", 3)
+
+    for node in ast.walk(function_node):
+        if not isinstance(node,ast.Return):
+            continue
+        else:
+            return_count += 1
+
+
+    if return_count > limit:
+        issues.append(
+            {
+                "severity": "WARNING",
+                "message": (
+                    f"Too many return statements "
+                    f"({return_count}/{limit})"
+                ),
+            }
+        )
+    return issues

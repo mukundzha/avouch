@@ -5,6 +5,7 @@ from scrut.rules.bare_except import analyze as analyze_bare_except
 from scrut.rules.if_else_chain import analyze as analyze_if_else_chain
 from scrut.rules.empty_except import analyze as analyze_empty_except 
 from scrut.rules.local_variables import analyze as analyze_local_variables
+from scrut.rules.return_statements import analyze as analyze_return_statements
 import ast
 
 BLOCK_NODES = (
@@ -134,6 +135,7 @@ def analyze_file(file_path, limits):
             )
 
             issues.extend(analyze_duplicateb(node, limits))
+            issues.extend(analyze_return_statements(node, limits))
 
         elif isinstance(node, ast.ClassDef):
             issues = []
