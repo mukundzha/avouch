@@ -10,4 +10,5 @@ DEFAULT_LIMITS = {
     "max_file_lines": 400,
     "max_complexity": 10,
     "max_boolean_conditions" : 5,
+    "max_if_else_chain": 5,
 }

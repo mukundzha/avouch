@@ -110,6 +110,7 @@ def analyze_file(file_path, limits):
                 )
 
             issues.extend(analyze_empty_except(node, limits))
+            issues.extend(analyze_if_else_chain(node, limits))
 
             if nesting_depth > limits["max_nesting"]:
                 issues.append(
