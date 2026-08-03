@@ -2,6 +2,7 @@ from scrut.rules.complexity import calculate_complexity
 from scrut.rules.boolean_complexity import analyze as analyze_boolean_complexity
 from scrut.rules.detect_duplicateb import analyze as analyze_duplicateb 
 from scrut.rules.bare_except import analyze as analyze_bare_except 
+from scrut.rules.if_else_chain import analyze as analyze_if_else_chain
 from scrut.rules.empty_except import analyze as analyze_empty_except 
 import ast
 
@@ -39,6 +40,7 @@ def get_depth(node, depth=0):
     return max_depth
 
 def analyze_file(file_path, limits):
+    
     source_code = read_file(file_path)
 
     if source_code is None:
@@ -152,7 +154,7 @@ def analyze_file(file_path, limits):
                 )
 
             issues.extend(analyze_boolean_complexity(node, limits))
-
+            issues.extend(analyze_if_else_chain(node, limits))
             cls.append(
                 {
                     "name": node.name,
