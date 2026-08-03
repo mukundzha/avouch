@@ -274,6 +274,41 @@ def test_analyze_file_boolean_complexity_class(tmp_path):
     assert classes[0]["issues"][0]["message"] == "Boolean expression too complex (6/5)"
 
 
+def test_analyze_file_lambda_at_limit(tmp_path):
+
+    file = tmp_path / "a.py"
+    file.write_text("def f():\n    g = lambda x: x + 1\n")
+
+    funcs, files, classes = analyze_file(str(file), DEFAULT_LIMITS)
+
+    assert not any(
+        "Lambda function too complex" in issue["message"]
+        for issue in funcs[0]["issues"]
+    )
+
+
+def test_analyze_file_lambda_over_limit(tmp_path):
+
+    source = (
+        "def f():\n"
+        "    g = lambda x: (\n"
+        "        x + 1 +\n"
+        "        1 + 1 +\n"
+        "        1 + 1 +\n"
+        "        1\n"
+        "    )\n"
+    )
+    file = tmp_path / "a.py"
+    file.write_text(source)
+
+    funcs, files, classes = analyze_file(str(file), DEFAULT_LIMITS)
+
+    assert any(
+        issue["message"] == "Lambda function too complex (20/5)"
+        for issue in funcs[0]["issues"]
+    )
+
+
 def test_analyze_file_clean(tmp_path):
 
     file = tmp_path / "clean.py"

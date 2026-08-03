@@ -7,6 +7,8 @@ from scrut.rules.empty_except import analyze as analyze_empty_except
 from scrut.rules.local_variables import analyze as analyze_local_variables
 from scrut.rules.nested_function import analyze as analyze_nested_function
 from scrut.rules.return_statements import analyze as analyze_return_statements
+from scrut.rules.large_lambda import analyze as analyze_large_lambda
+
 import ast
 
 BLOCK_NODES = (
@@ -114,6 +116,7 @@ def analyze_file(file_path, limits):
 
             issues.extend(analyze_empty_except(node, limits))
             issues.extend(analyze_if_else_chain(node, limits))
+            issues.extend(analyze_large_lambda(node, limits))
             issues.extend(analyze_local_variables(node, limits))
 
             if nesting_depth > limits["max_nesting"]:
@@ -121,6 +124,7 @@ def analyze_file(file_path, limits):
                     {
                         "severity": "WARNING",
                         "message": f"Nesting too deep ({nesting_depth}/{limits['max_nesting']})",
+
                     }
                 )
 
