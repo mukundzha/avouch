@@ -7,3 +7,4 @@ max_file_lines = 50
 max_complexity = 10
 max_boolean_conditions = 6
 max_local_variables = 15
+max_return_statements = 6
