@@ -11,4 +11,5 @@ DEFAULT_LIMITS = {
     "max_complexity": 10,
     "max_boolean_conditions" : 5,
     "max_if_else_chain": 5,
+    "max_local_variables": 15
 }
