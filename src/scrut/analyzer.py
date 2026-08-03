@@ -4,6 +4,7 @@ from scrut.rules.detect_duplicateb import analyze as analyze_duplicateb
 from scrut.rules.bare_except import analyze as analyze_bare_except 
 from scrut.rules.if_else_chain import analyze as analyze_if_else_chain
 from scrut.rules.empty_except import analyze as analyze_empty_except 
+from scrut.rules.local_variables import analyze as analyze_local_variables
 import ast
 
 BLOCK_NODES = (
@@ -111,6 +112,7 @@ def analyze_file(file_path, limits):
 
             issues.extend(analyze_empty_except(node, limits))
             issues.extend(analyze_if_else_chain(node, limits))
+            issues.extend(analyze_local_variables(node, limits))
 
             if nesting_depth > limits["max_nesting"]:
                 issues.append(
