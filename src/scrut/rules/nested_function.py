@@ -19,7 +19,7 @@ def analyze(function_node, limits):
         issues.append(
             {
                 "severity": "WARNING",
-                "message": "Nested function definition detected.",
+                "message": "Nested function definition detected. Move the inner function to module level or extract into a separate function.",
             }
         )
 

@@ -30,7 +30,8 @@ def analyze(function_node, limits):
                     "severity": "WARNING",
                     "message": (
                         f"Long if/elif chain "
-                        f"({chain_length}/{max_chain})"
+                        f"({chain_length}/{max_chain}). "
+                        f"Refactor into a dictionary dispatch or match statement."
                     ),
                 }
             )

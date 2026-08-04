@@ -15,7 +15,7 @@ def analyze(function_node, limits):
          issues.append(
             {
                 "severity": "WARNING",
-                "message": "Bare except detected. Catch a specific exception instead.",
+                "message": "Bare except detected. Catch a specific exception instead, e.g. except ValueError:.",
             }
         )
 

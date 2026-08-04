@@ -19,7 +19,8 @@ def analyze(function_node, limits):
                 "severity": "WARNING",
                 "message": (
                     f"Too many return statements "
-                    f"({return_count}/{limit})"
+                    f"({return_count}/{limit}). "
+                    f"Consolidate return paths or use early returns with a single exit point."
                 ),
             }
         )

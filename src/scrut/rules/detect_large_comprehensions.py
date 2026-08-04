@@ -28,7 +28,8 @@ def analyze(function_node, limits):
                     "severity": "WARNING",
                     "message": (
                         f"Large comprehension "
-                        f"({comprehension_size}/{limit})"
+                        f"({comprehension_size}/{limit}). "
+                        f"Extract into a named function or break into multiple steps."
                     ),
                 }
             )

@@ -36,3 +36,6 @@ htmlcov/
 
 # Environment files
 .env
+
+# Test scratch file
+test.py

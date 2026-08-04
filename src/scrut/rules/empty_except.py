@@ -42,7 +42,7 @@ def analyze(function_node, limits):
                 issues.append(
                     {
                         "severity": "WARNING",
-                        "message": "Duplicate branch detected. Multiple if/elif branches contain the same logic.",
+                        "message": "Duplicate branch detected. Multiple if/elif branches contain the same logic. Merge duplicate branches or verify the condition is correct.",
                     }
                 )
                 break

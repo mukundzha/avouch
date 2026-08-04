@@ -93,7 +93,7 @@ def analyze_file(file_path, limits):
                 issues.append(
                     {
                         "severity": "WARNING",
-                        "message": f"Function too long ({line_count}/{limits['max_function_lines']})",
+                        "message": f"Function too long ({line_count}/{limits['max_function_lines']}). Extract helper functions or split into smaller units.",
                     }
                 )
 
@@ -101,7 +101,7 @@ def analyze_file(file_path, limits):
                 issues.append(
                     {
                         "severity": "WARNING",
-                        "message": f"Function too complex ({complexity}/{limits['max_complexity']})",
+                        "message": f"Function too complex ({complexity}/{limits['max_complexity']}). Reduce branching or extract nested logic into separate functions.",
                     }
                 )
 
@@ -111,7 +111,7 @@ def analyze_file(file_path, limits):
                 issues.append(
                     {
                         "severity": "WARNING",
-                        "message": f"Too many parameters ({param_count}/{limits['max_parameters']})",
+                        "message": f"Too many parameters ({param_count}/{limits['max_parameters']}). Group related parameters into a data class or dictionary.",
                     }
                 )
 
@@ -124,8 +124,7 @@ def analyze_file(file_path, limits):
                 issues.append(
                     {
                         "severity": "WARNING",
-                        "message": f"Nesting too deep ({nesting_depth}/{limits['max_nesting']})",
-
+                        "message": f"Nesting too deep ({nesting_depth}/{limits['max_nesting']}). Flatten control flow with early returns or guard clauses.",
                     }
                 )
 
@@ -154,7 +153,7 @@ def analyze_file(file_path, limits):
                 issues.append(
                     {
                         "severity": "WARNING",
-                        "message": f"Class too large ({class_line_count}/{limits['max_class_lines']})",
+                        "message": f"Class too large ({class_line_count}/{limits['max_class_lines']}). Split into smaller classes with single responsibilities.",
                     }
                 )
 
@@ -162,7 +161,7 @@ def analyze_file(file_path, limits):
                 issues.append(
                     {
                         "severity": "WARNING",
-                        "message": f"Class too complex ({complexity}/{limits['max_complexity']})",
+                        "message": f"Class too complex ({complexity}/{limits['max_complexity']}). Decompose into focused classes or extract complex methods.",
                     }
                 )
 
@@ -186,7 +185,7 @@ def analyze_file(file_path, limits):
         file_issues.append(
             {
                 "severity": "WARNING",
-                "message": f"File too large ({file_line_count}/{limits['max_file_lines']})",
+                "message": f"File too large ({file_line_count}/{limits['max_file_lines']}). Split into modules or move unrelated code to separate files.",
             }
         )
 

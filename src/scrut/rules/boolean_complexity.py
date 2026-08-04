@@ -24,7 +24,8 @@ def analyze(function_node, limits):
                         "severity": "WARNING",
                         "message": (
                             f"Boolean expression too complex "
-                            f"({condition_count}/{limits['max_boolean_conditions']})"
+                            f"({condition_count}/{limits['max_boolean_conditions']}). "
+                            f"Break into named conditions or extract into a predicate function."
                         ),
                     }
                 )

@@ -31,7 +31,8 @@ def analyze(function_node, limits):
                 "severity": "WARNING",
                 "message": (
                     f"Too many local variables "
-                    f"({total_variables}/{max_variables})"
+                    f"({total_variables}/{max_variables}). "
+                    f"Extract logic into helper functions or use data classes."
                 ),
             }
         )

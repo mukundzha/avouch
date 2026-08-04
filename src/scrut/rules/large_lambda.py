@@ -14,7 +14,8 @@ def analyze(function_node, limits):
                     "severity": "WARNING",
                     "message": (
                         f"Lambda function too complex "
-                        f"({body_size}/{max_lambda_nodes})"
+                        f"({body_size}/{max_lambda_nodes}). "
+                        f"Convert to a named function for clarity."
                     ),
                 }
              )
