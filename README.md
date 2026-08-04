@@ -25,9 +25,10 @@ reinforces them.
 **1. The review set is the diff, not the repository.**
 A whole-repo linter reports pre-existing debt and buries the findings you
 just introduced under hundreds you didn't. Scrut computes its review set
-from Git at run time (`git diff HEAD --name-only`) and never asks you to
-configure it. Every finding in the output is attributable to work you are
-about to push. The tool reviews your commit, not your legacy.
+from Git at run time (`git diff HEAD --name-only` plus untracked files)
+and never asks you to configure it. Every finding in the output is
+attributable to work you are about to push. The tool reviews your commit,
+not your legacy.
 
 **2. Metrics are exact, or they don't ship.**
 Structural questions are answered by the Python abstract syntax tree:
@@ -253,7 +254,7 @@ every function it calls lives in another module, and nothing imports
 
 ```mermaid
 flowchart LR
-    G[git.py<br/>review set: git diff HEAD] --> A[analyzer.py<br/>AST · eight rules]
+    G[git.py<br/>review set: git diff HEAD + untracked] --> A[analyzer.py<br/>AST · eight rules]
     C[config<br/>scrut.toml + defaults] --> A
     A --> R[report.py<br/>colored report]
 ```
@@ -351,8 +352,6 @@ Informed by the documented limitations, ordered by the pain they remove:
 **0.2 — Configuration and review-set hardening**
 - Validate `scrut.toml` values with readable errors (today: a malformed
   file raises)
-- Review untracked files and repositories without commits (today: both are
-  invisible to `git diff HEAD`)
 - Search upward from the working directory for `scrut.toml` (today:
   CWD only)
 
@@ -379,7 +378,8 @@ output is always relevant to the next push.
 
 **Why `git diff HEAD` and not `git diff`?**
 Plain `git diff` covers only unstaged changes. `HEAD` covers staged plus
-unstaged — the complete set of files about to be pushed.
+unstaged — the complete set of files about to be pushed — and scrut adds
+untracked files on top, so brand-new files are never missed.
 
 **Why AST instead of regex?**
 Regex cannot count parentheses across lines, measure nesting, or distinguish

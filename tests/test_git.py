@@ -6,7 +6,7 @@ from scrut.analyzer import analyze_file, get_depth, read_file
 from scrut.git import get_changed_files, get_reviewable_files, is_gitrepo
 from scrut.report import generate_report
 from scrut.cli import main
-from scrut.config.default import DEFAULT_LIMITS
+from scrut.config.default import DEFAULT_LIMITS, DEFAULT_RULES
 from scrut.config.loader import load_config, merge_limits
 from scrut.rules.complexity import calculate_complexity
 from scrut.rules.boolean_complexity import analyze, count_boolean_conditions
@@ -31,9 +31,12 @@ def test_is_gitrepo_false(mock_run):
 @patch("scrut.git.subprocess.run")
 def test_get_changed_files(mock_run):
 
-    mock_run.return_value = Mock(stdout="a.py\nb.py\nREADME.md\n", returncode=0)
+    mock_run.side_effect = [
+        Mock(stdout="a.py\nb.py\nREADME.md\n", returncode=0),
+        Mock(stdout="new.py\n", returncode=0),
+    ]
 
-    assert get_changed_files() == ["a.py", "b.py", "README.md"]
+    assert get_changed_files() == ["a.py", "b.py", "README.md", "new.py"]
 
 
 def test_get_reviewable_files(tmp_path):
@@ -211,7 +214,7 @@ def test_analyze_file_complexity_at_limit(tmp_path):
     file = tmp_path / "a.py"
     file.write_text("def f(x):\n" + body)
 
-    funcs, files, classes = analyze_file(str(file), DEFAULT_LIMITS)
+    funcs, files, classes = analyze_file(str(file), DEFAULT_LIMITS, DEFAULT_RULES)
 
     assert funcs[0]["issues"] == []
 
@@ -222,9 +225,9 @@ def test_analyze_file_complexity_over_limit(tmp_path):
     file = tmp_path / "a.py"
     file.write_text("def f(x):\n" + body)
 
-    funcs, files, classes = analyze_file(str(file), DEFAULT_LIMITS)
+    funcs, files, classes = analyze_file(str(file), DEFAULT_LIMITS, DEFAULT_RULES)
 
-    assert funcs[0]["issues"][0]["message"] == "Function too complex (11/10)"
+    assert funcs[0]["issues"][0]["message"] == "Function too complex (11/10). Reduce branching or extract nested logic into separate functions."
 
 
 def test_analyze_file_class_complexity(tmp_path):
@@ -233,9 +236,9 @@ def test_analyze_file_class_complexity(tmp_path):
     file = tmp_path / "a.py"
     file.write_text(source)
 
-    funcs, files, classes = analyze_file(str(file), DEFAULT_LIMITS)
+    funcs, files, classes = analyze_file(str(file), DEFAULT_LIMITS, DEFAULT_RULES)
 
-    assert classes[0]["issues"][0]["message"] == "Class too complex (11/10)"
+    assert classes[0]["issues"][0]["message"] == "Class too complex (11/10). Decompose into focused classes or extract complex methods."
 
 
 def test_analyze_file_boolean_complexity_at_limit(tmp_path):
@@ -244,7 +247,7 @@ def test_analyze_file_boolean_complexity_at_limit(tmp_path):
     file = tmp_path / "a.py"
     file.write_text("def f(x):\n    " + body.replace("\n", "\n    "))
 
-    funcs, files, classes = analyze_file(str(file), DEFAULT_LIMITS)
+    funcs, files, classes = analyze_file(str(file), DEFAULT_LIMITS, DEFAULT_RULES)
 
     assert not any(
         "Boolean expression" in issue["message"]
@@ -258,9 +261,9 @@ def test_analyze_file_boolean_complexity_over_limit(tmp_path):
     file = tmp_path / "a.py"
     file.write_text("def f(x):\n    " + body.replace("\n", "\n    "))
 
-    funcs, files, classes = analyze_file(str(file), DEFAULT_LIMITS)
+    funcs, files, classes = analyze_file(str(file), DEFAULT_LIMITS, DEFAULT_RULES)
 
-    assert funcs[0]["issues"][0]["message"] == "Boolean expression too complex (6/5)"
+    assert funcs[0]["issues"][0]["message"] == "Boolean expression too complex (6/5). Break into named conditions or extract into a predicate function."
 
 
 def test_analyze_file_boolean_complexity_class(tmp_path):
@@ -269,9 +272,9 @@ def test_analyze_file_boolean_complexity_class(tmp_path):
     file = tmp_path / "a.py"
     file.write_text("class C:\n    def m(self):\n        " + body.replace("\n", "\n        "))
 
-    funcs, files, classes = analyze_file(str(file), DEFAULT_LIMITS)
+    funcs, files, classes = analyze_file(str(file), DEFAULT_LIMITS, DEFAULT_RULES)
 
-    assert classes[0]["issues"][0]["message"] == "Boolean expression too complex (6/5)"
+    assert classes[0]["issues"][0]["message"] == "Boolean expression too complex (6/5). Break into named conditions or extract into a predicate function."
 
 
 def test_analyze_file_lambda_at_limit(tmp_path):
@@ -279,7 +282,7 @@ def test_analyze_file_lambda_at_limit(tmp_path):
     file = tmp_path / "a.py"
     file.write_text("def f():\n    g = lambda x: x + 1\n")
 
-    funcs, files, classes = analyze_file(str(file), DEFAULT_LIMITS)
+    funcs, files, classes = analyze_file(str(file), DEFAULT_LIMITS, DEFAULT_RULES)
 
     assert not any(
         "Lambda function too complex" in issue["message"]
@@ -301,10 +304,10 @@ def test_analyze_file_lambda_over_limit(tmp_path):
     file = tmp_path / "a.py"
     file.write_text(source)
 
-    funcs, files, classes = analyze_file(str(file), DEFAULT_LIMITS)
+    funcs, files, classes = analyze_file(str(file), DEFAULT_LIMITS, DEFAULT_RULES)
 
     assert any(
-        issue["message"] == "Lambda function too complex (20/5)"
+        issue["message"] == "Lambda function too complex (20/5). Convert to a named function for clarity."
         for issue in funcs[0]["issues"]
     )
 
@@ -314,7 +317,7 @@ def test_analyze_file_clean(tmp_path):
     file = tmp_path / "clean.py"
     file.write_text("def ok():\n    pass\n")
 
-    funcs, files, classes = analyze_file(str(file), DEFAULT_LIMITS)
+    funcs, files, classes = analyze_file(str(file), DEFAULT_LIMITS, DEFAULT_RULES)
 
     assert funcs[0]["name"] == "ok"
     assert funcs[0]["file"] == str(file)
@@ -327,7 +330,7 @@ def test_analyze_file_syntax_error(tmp_path):
     file = tmp_path / "broken.py"
     file.write_text("def broken(\n")
 
-    funcs, files, classes = analyze_file(str(file), DEFAULT_LIMITS)
+    funcs, files, classes = analyze_file(str(file), DEFAULT_LIMITS, DEFAULT_RULES)
 
     assert funcs == []
     assert files[0]["issues"] == [
@@ -337,7 +340,7 @@ def test_analyze_file_syntax_error(tmp_path):
 
 def test_analyze_file_unreadable(tmp_path):
 
-    funcs, files, classes = analyze_file(str(tmp_path / "missing.py"), DEFAULT_LIMITS)
+    funcs, files, classes = analyze_file(str(tmp_path / "missing.py"), DEFAULT_LIMITS, DEFAULT_RULES)
 
     assert funcs == []
     assert files[0]["issues"] == [
@@ -357,12 +360,12 @@ def test_analyze_file_warnings(tmp_path):
         "max_function_lines": 1,
     }
 
-    funcs, files, classes = analyze_file(str(file), limits)
+    funcs, files, classes = analyze_file(str(file), limits, DEFAULT_RULES)
 
     assert [issue["message"] for issue in funcs[0]["issues"]] == [
-        "Function too long (3/1)",
-        "Too many parameters (2/1)",
-        "Nesting too deep (1/0)",
+        "Function too long (3/1). Extract helper functions or split into smaller units.",
+        "Too many parameters (2/1). Group related parameters into a data class or dictionary.",
+        "Nesting too deep (1/0). Flatten control flow with early returns or guard clauses.",
     ]
 
 
@@ -373,10 +376,48 @@ def test_analyze_file_class_and_file_warnings(tmp_path):
 
     limits = {**DEFAULT_LIMITS, "max_class_lines": 10, "max_file_lines": 10}
 
-    funcs, files, classes = analyze_file(str(file), limits)
+    funcs, files, classes = analyze_file(str(file), limits, DEFAULT_RULES)
 
-    assert classes[0]["issues"][0]["message"] == "Class too large (41/10)"
-    assert files[0]["issues"][0]["message"] == "File too large (41/10)"
+    assert classes[0]["issues"][0]["message"] == "Class too large (41/10). Split into smaller classes with single responsibilities."
+    assert files[0]["issues"][0]["message"] == "File too large (41/10). Split into modules or move unrelated code to separate files."
+
+
+def test_analyze_file_rules_can_disable(tmp_path):
+
+    source = (
+        "def f():\n"
+        "    if a and b and c and d and e and f:\n"
+        "        pass\n"
+    )
+    file = tmp_path / "a.py"
+    file.write_text(source)
+
+    funcs, files, classes = analyze_file(
+        str(file), DEFAULT_LIMITS, {**DEFAULT_RULES, "max_boolean_conditions": False}
+    )
+
+    assert not any(
+        "Boolean expression" in issue["message"]
+        for issue in funcs[0]["issues"]
+    )
+
+
+def test_analyze_file_rules_default_all_enabled(tmp_path):
+
+    source = (
+        "def f():\n"
+        "    if a and b and c and d and e and f:\n"
+        "        pass\n"
+    )
+    file = tmp_path / "a.py"
+    file.write_text(source)
+
+    funcs, files, classes = analyze_file(str(file), DEFAULT_LIMITS, DEFAULT_RULES)
+
+    assert any(
+        "Boolean expression" in issue["message"]
+        for issue in funcs[0]["issues"]
+    )
 
 
 def test_load_config_default(tmp_path, monkeypatch):

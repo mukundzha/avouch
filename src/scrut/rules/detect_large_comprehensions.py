@@ -5,7 +5,7 @@ def analyze(function_node, limits):
 
     issues = []
 
-    limit = limits.get("max_comprehension_length", 10)
+    limit = limits.get("max_large_comprehensions", 10)
 
     for node in ast.walk(function_node):
 

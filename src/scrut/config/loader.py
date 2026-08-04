@@ -1,7 +1,7 @@
 from pathlib import Path
 import tomllib
 
-from .default import DEFAULT_LIMITS
+from .default import DEFAULT_LIMITS, DEFAULT_RULES
 
 CONFIG_FILE = "scrut.toml"
 
@@ -11,7 +11,7 @@ def load_config():
     config_path = Path(CONFIG_FILE)
 
     if not config_path.exists():
-        return {"limits": DEFAULT_LIMITS}
+        return {"limits": DEFAULT_LIMITS, "rules": DEFAULT_RULES}
 
     with open(config_path, "rb") as file:
         config = tomllib.load(file)
@@ -20,7 +20,11 @@ def load_config():
 
     merged_limits = merge_limits(user_limits)
 
-    return {"limits": merged_limits}
+    user_rules = config.get("rules", {})
+
+    merged_rules = {**DEFAULT_RULES, **user_rules}
+
+    return {"limits": merged_limits, "rules": merged_rules}
 
 
 def merge_limits(user_limits):

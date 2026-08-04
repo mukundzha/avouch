@@ -45,7 +45,7 @@ def get_depth(node, depth=0):
 
     return max_depth
 
-def analyze_file(file_path, limits):
+def analyze_file(file_path, limits, rules):
     
     source_code = read_file(file_path)
 
@@ -89,7 +89,7 @@ def analyze_file(file_path, limits):
             nesting_depth = get_depth(node)
             complexity = calculate_complexity(node)
 
-            if line_count > limits["max_function_lines"]:
+            if rules["max_function_lines"] and line_count > limits["max_function_lines"]:
                 issues.append(
                     {
                         "severity": "WARNING",
@@ -97,7 +97,7 @@ def analyze_file(file_path, limits):
                     }
                 )
 
-            if complexity > limits["max_complexity"]:
+            if rules["max_complexity"] and complexity > limits["max_complexity"]:
                 issues.append(
                     {
                         "severity": "WARNING",
@@ -105,9 +105,10 @@ def analyze_file(file_path, limits):
                     }
                 )
 
-            issues.extend(analyze_boolean_complexity(node, limits))
+            if rules["max_boolean_conditions"]:
+                issues.extend(analyze_boolean_complexity(node, limits))
 
-            if param_count > limits["max_parameters"]:
+            if rules["max_parameters"] and param_count > limits["max_parameters"]:
                 issues.append(
                     {
                         "severity": "WARNING",
@@ -115,12 +116,16 @@ def analyze_file(file_path, limits):
                     }
                 )
 
-            issues.extend(analyze_empty_except(node, limits))
-            issues.extend(analyze_if_else_chain(node, limits))
-            issues.extend(analyze_large_lambda(node, limits))
-            issues.extend(analyze_local_variables(node, limits))
+            if rules["empty_except"]:
+                issues.extend(analyze_empty_except(node, limits))
+            if rules["max_if_else_chain"]:
+                issues.extend(analyze_if_else_chain(node, limits))
+            if rules["max_lambda_nodes"]:
+                issues.extend(analyze_large_lambda(node, limits))
+            if rules["max_local_variables"]:
+                issues.extend(analyze_local_variables(node, limits))
 
-            if nesting_depth > limits["max_nesting"]:
+            if rules["max_nesting"] and nesting_depth > limits["max_nesting"]:
                 issues.append(
                     {
                         "severity": "WARNING",
@@ -139,17 +144,21 @@ def analyze_file(file_path, limits):
                 }
             )
 
-            issues.extend(analyze_duplicateb(node, limits))
-            issues.extend(analyze_large_comprehensions(node, limits))
-            issues.extend(analyze_nested_function(node, limits))
-            issues.extend(analyze_return_statements(node, limits))
+            if rules["detect_duplicateb"]:
+                issues.extend(analyze_duplicateb(node, limits))
+            if rules["max_large_comprehensions"]:
+                issues.extend(analyze_large_comprehensions(node, limits))
+            if rules["nested_function"]:
+                issues.extend(analyze_nested_function(node, limits))
+            if rules["max_return_statements"]:
+                issues.extend(analyze_return_statements(node, limits))
 
         elif isinstance(node, ast.ClassDef):
             issues = []
             class_line_count = node.end_lineno - node.lineno + 1
             complexity = calculate_complexity(node)
 
-            if class_line_count > limits["max_class_lines"]:
+            if rules["max_class_lines"] and class_line_count > limits["max_class_lines"]:
                 issues.append(
                     {
                         "severity": "WARNING",
@@ -157,7 +166,7 @@ def analyze_file(file_path, limits):
                     }
                 )
 
-            if complexity > limits["max_complexity"]:
+            if rules["max_complexity"] and complexity > limits["max_complexity"]:
                 issues.append(
                     {
                         "severity": "WARNING",
@@ -165,8 +174,10 @@ def analyze_file(file_path, limits):
                     }
                 )
 
-            issues.extend(analyze_boolean_complexity(node, limits))
-            issues.extend(analyze_if_else_chain(node, limits))
+            if rules["max_boolean_conditions"]:
+                issues.extend(analyze_boolean_complexity(node, limits))
+            if rules["max_if_else_chain"]:
+                issues.extend(analyze_if_else_chain(node, limits))
             cls.append(
                 {
                     "name": node.name,
@@ -176,12 +187,13 @@ def analyze_file(file_path, limits):
                 }
             )
 
-            issues.extend(analyze_empty_except(node, limits))
+            if rules["empty_except"]:
+                issues.extend(analyze_empty_except(node, limits))
 
     file_line_count = len(source_code.splitlines())
     file_issues = []
 
-    if file_line_count > limits["max_file_lines"]:
+    if rules["max_file_lines"] and file_line_count > limits["max_file_lines"]:
         file_issues.append(
             {
                 "severity": "WARNING",
