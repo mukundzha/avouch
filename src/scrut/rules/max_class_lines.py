@@ -10,6 +10,7 @@ def analyze(class_node, limits):
     if line_count > limits["max_class_lines"]:
         issues.append(
             {
+                "rule": "SCR010",
                 "severity": "WARNING",
                 "message": (
                     f"Class too large ({line_count}/{limits['max_class_lines']}). "

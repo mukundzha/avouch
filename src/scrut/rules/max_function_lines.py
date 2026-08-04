@@ -10,6 +10,7 @@ def analyze(function_node, limits):
     if line_count > limits["max_function_lines"]:
         issues.append(
             {
+                "rule": "SCR012",
                 "severity": "WARNING",
                 "message": (
                     f"Function too long ({line_count}/{limits['max_function_lines']}). "

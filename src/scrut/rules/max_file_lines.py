@@ -10,6 +10,7 @@ def analyze(source_code, limits):
     if file_line_count > limits["max_file_lines"]:
         issues.append(
             {
+                "rule": "SCR011",
                 "severity": "WARNING",
                 "message": (
                     f"File too large ({file_line_count}/{limits['max_file_lines']}). "

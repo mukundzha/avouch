@@ -53,6 +53,7 @@ def render_report(function_reports, file_reports, class_reports):
                     item_name,
                     issue["message"],
                     issue["severity"],
+                    issue.get("rule"),
                 )
             )
 
@@ -101,7 +102,7 @@ def render_file(file_name, issues):
 
     print(_style(file_name, 1, 36))
 
-    for item_name, message, severity in issues:
+    for item_name, message, severity, rule in issues:
 
         if severity == "ERROR":
             icon = "✖"
@@ -110,10 +111,13 @@ def render_file(file_name, issues):
             icon = "⚠"
             color = 33
 
+        rule_label = _style(rule, 36) if rule else ""
+
         print(
             f"  {_style(icon, color)} "
             f"{_style(item_name, 1)} "
-            f"{_style('—', 2)} "
+            + (f"{rule_label} " if rule else "")
+            + f"{_style('—', 2)} "
             f"{_style(message, color)}"
         )
 

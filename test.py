@@ -33,7 +33,7 @@ def many_locals():
     return a1 + a16
 
 # 4. nested_function
-def outer():
+def outer(): 
     def inner():
         return 1
     return inner

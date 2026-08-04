@@ -34,6 +34,7 @@ def analyze(function_node, limits):
     if nesting_depth > limits["max_nesting"]:
         issues.append(
             {
+                "rule": "SCR013",
                 "severity": "WARNING",
                 "message": (
                     f"Nesting too deep ({nesting_depth}/{limits['max_nesting']}). "
