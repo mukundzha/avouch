@@ -4,6 +4,7 @@ from scrut.rules.detect_duplicateb import analyze as analyze_duplicateb
 from scrut.rules.bare_except import analyze as analyze_bare_except 
 from scrut.rules.if_else_chain import analyze as analyze_if_else_chain
 from scrut.rules.empty_except import analyze as analyze_empty_except 
+from scrut.rules.detect_large_comprehensions import analyze as analyze_large_comprehensions
 from scrut.rules.local_variables import analyze as analyze_local_variables
 from scrut.rules.nested_function import analyze as analyze_nested_function
 from scrut.rules.return_statements import analyze as analyze_return_statements
@@ -140,6 +141,7 @@ def analyze_file(file_path, limits):
             )
 
             issues.extend(analyze_duplicateb(node, limits))
+            issues.extend(analyze_large_comprehensions(node, limits))
             issues.extend(analyze_nested_function(node, limits))
             issues.extend(analyze_return_statements(node, limits))
 
