@@ -4,6 +4,7 @@ from scrut.rules.detect_duplicateb import analyze as analyze_duplicateb
 from scrut.rules.bare_except import analyze as analyze_bare_except 
 from scrut.rules.if_else_chain import analyze as analyze_if_else_chain
 from scrut.rules.empty_except import analyze as analyze_empty_except 
+from scrut.rules.async_without_await import analyze as analyze_async_without_await
 from scrut.rules.detect_large_comprehensions import analyze as analyze_large_comprehensions
 from scrut.rules.local_variables import analyze as analyze_local_variables
 from scrut.rules.nested_function import analyze as analyze_nested_function
@@ -152,6 +153,24 @@ def analyze_file(file_path, limits, rules):
                 issues.extend(analyze_nested_function(node, limits))
             if rules["max_return_statements"]:
                 issues.extend(analyze_return_statements(node, limits))
+
+        elif isinstance(node, ast.AsyncFunctionDef):
+
+            issues = []
+
+            if rules["async_without_await"]:
+                issues.extend(analyze_async_without_await(node, limits))
+
+            funcs.append(
+                {
+                    "name": node.name,
+                    "file": file_path,
+                    "lines": node.end_lineno - node.lineno + 1,
+                    "parameters": len(node.args.args),
+                    "nesting_depth": get_depth(node),
+                    "issues": issues,
+                }
+            )
 
         elif isinstance(node, ast.ClassDef):
             issues = []

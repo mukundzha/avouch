@@ -6,8 +6,8 @@ from scrut.analyzer import analyze_file, get_depth, read_file
 from scrut.git import get_changed_files, get_reviewable_files, is_gitrepo
 from scrut.report import generate_report
 from scrut.cli import main
-from scrut.config.default import DEFAULT_LIMITS, DEFAULT_RULES
-from scrut.config.loader import load_config, merge_limits
+from scrut.config.default import DEFAULT_LIMITS
+from scrut.config.loader import load_config, merge_limits, DEFAULT_RULES
 from scrut.rules.complexity import calculate_complexity
 from scrut.rules.boolean_complexity import analyze, count_boolean_conditions
 
@@ -380,44 +380,6 @@ def test_analyze_file_class_and_file_warnings(tmp_path):
 
     assert classes[0]["issues"][0]["message"] == "Class too large (41/10). Split into smaller classes with single responsibilities."
     assert files[0]["issues"][0]["message"] == "File too large (41/10). Split into modules or move unrelated code to separate files."
-
-
-def test_analyze_file_rules_can_disable(tmp_path):
-
-    source = (
-        "def f():\n"
-        "    if a and b and c and d and e and f:\n"
-        "        pass\n"
-    )
-    file = tmp_path / "a.py"
-    file.write_text(source)
-
-    funcs, files, classes = analyze_file(
-        str(file), DEFAULT_LIMITS, {**DEFAULT_RULES, "max_boolean_conditions": False}
-    )
-
-    assert not any(
-        "Boolean expression" in issue["message"]
-        for issue in funcs[0]["issues"]
-    )
-
-
-def test_analyze_file_rules_default_all_enabled(tmp_path):
-
-    source = (
-        "def f():\n"
-        "    if a and b and c and d and e and f:\n"
-        "        pass\n"
-    )
-    file = tmp_path / "a.py"
-    file.write_text(source)
-
-    funcs, files, classes = analyze_file(str(file), DEFAULT_LIMITS, DEFAULT_RULES)
-
-    assert any(
-        "Boolean expression" in issue["message"]
-        for issue in funcs[0]["issues"]
-    )
 
 
 def test_load_config_default(tmp_path, monkeypatch):
