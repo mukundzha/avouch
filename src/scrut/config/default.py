@@ -14,4 +14,5 @@ DEFAULT_LIMITS = {
     "max_local_variables": 15,
     "max_return_statements": 3,
     "max_lambda_nodes": 5,
+    "max_comprehension_length": 10,
 }
