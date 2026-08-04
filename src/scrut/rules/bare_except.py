@@ -13,8 +13,9 @@ def analyze(function_node, limits):
         # Check if the handler is a bare except
         if node.type is None:
          issues.append(
-            {
-                "severity": "WARNING",
+             {
+                 "rule": "SCR002",
+                 "severity": "WARNING",
                 "message": "Bare except detected. Catch a specific exception instead, e.g. except ValueError:.",
             }
         )

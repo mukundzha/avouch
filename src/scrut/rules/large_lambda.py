@@ -11,6 +11,7 @@ def analyze(function_node, limits):
          if body_size > max_lambda_nodes:
             issues.append(
                 {
+                    "rule": "SCR008",
                     "severity": "WARNING",
                     "message": (
                         f"Lambda function too complex "

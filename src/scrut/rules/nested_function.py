@@ -18,6 +18,7 @@ def analyze(function_node, limits):
         # Any other FunctionDef is nested
         issues.append(
             {
+                "rule": "SCR010",
                 "severity": "WARNING",
                 "message": "Nested function definition detected. Move the inner function to module level or extract into a separate function.",
             }

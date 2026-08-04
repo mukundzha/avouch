@@ -28,6 +28,7 @@ def analyze(function_node, limits):
 
         issues.append(
             {
+                "rule": "SCR009",
                 "severity": "WARNING",
                 "message": (
                     f"Too many local variables "

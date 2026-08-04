@@ -41,6 +41,7 @@ def analyze(function_node, limits):
             if branch_code in seen:
                 issues.append(
                     {
+                        "rule": "SCR004",
                         "severity": "WARNING",
                         "message": "Duplicate branch detected. Multiple if/elif branches contain the same logic. Merge duplicate branches or verify the condition is correct.",
                     }

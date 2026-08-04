@@ -21,6 +21,7 @@ def analyze(function_node, limits):
 
                 issues.append(
                     {
+                        "rule": "SCR003",
                         "severity": "WARNING",
                         "message": (
                             f"Boolean expression too complex "

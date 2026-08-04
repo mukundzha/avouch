@@ -10,6 +10,7 @@ def analyze(function_node, limits):
 
     issues.append(
         {
+            "rule": "SCR001",
             "severity": "WARNING",
             "message": (
                 "Async function contains no await expression. "

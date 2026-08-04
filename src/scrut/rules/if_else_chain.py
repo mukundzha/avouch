@@ -27,6 +27,7 @@ def analyze(function_node, limits):
         if chain_length > max_chain:
             issues.append(
                 {
+                    "rule": "SCR007",
                     "severity": "WARNING",
                     "message": (
                         f"Long if/elif chain "

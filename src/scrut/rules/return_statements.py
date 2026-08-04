@@ -16,6 +16,7 @@ def analyze(function_node, limits):
     if return_count > limit:
         issues.append(
             {
+                "rule": "SCR011",
                 "severity": "WARNING",
                 "message": (
                     f"Too many return statements "

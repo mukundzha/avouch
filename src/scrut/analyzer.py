@@ -1,28 +1,23 @@
 from scrut.rules.complexity import calculate_complexity
 from scrut.rules.boolean_complexity import analyze as analyze_boolean_complexity
-from scrut.rules.detect_duplicateb import analyze as analyze_duplicateb 
-from scrut.rules.bare_except import analyze as analyze_bare_except 
+from scrut.rules.detect_duplicateb import analyze as analyze_duplicateb
+from scrut.rules.bare_except import analyze as analyze_bare_except
 from scrut.rules.if_else_chain import analyze as analyze_if_else_chain
-from scrut.rules.empty_except import analyze as analyze_empty_except 
+from scrut.rules.empty_except import analyze as analyze_empty_except
 from scrut.rules.async_without_await import analyze as analyze_async_without_await
 from scrut.rules.detect_large_comprehensions import analyze as analyze_large_comprehensions
 from scrut.rules.local_variables import analyze as analyze_local_variables
 from scrut.rules.nested_function import analyze as analyze_nested_function
 from scrut.rules.return_statements import analyze as analyze_return_statements
 from scrut.rules.large_lambda import analyze as analyze_large_lambda
+from scrut.rules.max_function_lines import analyze as analyze_max_function_lines
+from scrut.rules.max_parameters import analyze as analyze_max_parameters
+from scrut.rules.max_nesting import analyze as analyze_max_nesting, get_depth, BLOCK_NODES
+from scrut.rules.max_class_lines import analyze as analyze_max_class_lines
+from scrut.rules.max_file_lines import analyze as analyze_max_file_lines
 
 import ast
 
-BLOCK_NODES = (
-    ast.If,
-    ast.For,
-    ast.AsyncFor,
-    ast.While,
-    ast.With,
-    ast.AsyncWith,
-    ast.Try,
-    ast.Match,
-)
 
 def read_file(file_path):
 
@@ -34,20 +29,8 @@ def read_file(file_path):
         return None
 
 
-def get_depth(node, depth=0):
-    max_depth = depth
-
-    for child in ast.iter_child_nodes(node):
-
-        if isinstance(child, BLOCK_NODES):
-            max_depth = max(max_depth, get_depth(child, depth + 1))
-        else:
-            max_depth = max(max_depth, get_depth(child, depth))
-
-    return max_depth
-
 def analyze_file(file_path, limits, rules):
-    
+
     source_code = read_file(file_path)
 
     if source_code is None:
@@ -90,13 +73,8 @@ def analyze_file(file_path, limits, rules):
             nesting_depth = get_depth(node)
             complexity = calculate_complexity(node)
 
-            if rules["max_function_lines"] and line_count > limits["max_function_lines"]:
-                issues.append(
-                    {
-                        "severity": "WARNING",
-                        "message": f"Function too long ({line_count}/{limits['max_function_lines']}). Extract helper functions or split into smaller units.",
-                    }
-                )
+            if rules["max_function_lines"]:
+                issues.extend(analyze_max_function_lines(node, limits))
 
             if rules["max_complexity"] and complexity > limits["max_complexity"]:
                 issues.append(
@@ -109,13 +87,8 @@ def analyze_file(file_path, limits, rules):
             if rules["max_boolean_conditions"]:
                 issues.extend(analyze_boolean_complexity(node, limits))
 
-            if rules["max_parameters"] and param_count > limits["max_parameters"]:
-                issues.append(
-                    {
-                        "severity": "WARNING",
-                        "message": f"Too many parameters ({param_count}/{limits['max_parameters']}). Group related parameters into a data class or dictionary.",
-                    }
-                )
+            if rules["max_parameters"]:
+                issues.extend(analyze_max_parameters(node, limits))
 
             if rules["empty_except"]:
                 issues.extend(analyze_empty_except(node, limits))
@@ -125,14 +98,10 @@ def analyze_file(file_path, limits, rules):
                 issues.extend(analyze_large_lambda(node, limits))
             if rules["max_local_variables"]:
                 issues.extend(analyze_local_variables(node, limits))
-
-            if rules["max_nesting"] and nesting_depth > limits["max_nesting"]:
-                issues.append(
-                    {
-                        "severity": "WARNING",
-                        "message": f"Nesting too deep ({nesting_depth}/{limits['max_nesting']}). Flatten control flow with early returns or guard clauses.",
-                    }
-                )
+            if rules["max_nesting"]:
+                issues.extend(analyze_max_nesting(node, limits))
+            if rules["bare_except"]:
+                issues.extend(analyze_bare_except(node, limits))
 
             funcs.append(
                 {
@@ -174,16 +143,10 @@ def analyze_file(file_path, limits, rules):
 
         elif isinstance(node, ast.ClassDef):
             issues = []
-            class_line_count = node.end_lineno - node.lineno + 1
             complexity = calculate_complexity(node)
 
-            if rules["max_class_lines"] and class_line_count > limits["max_class_lines"]:
-                issues.append(
-                    {
-                        "severity": "WARNING",
-                        "message": f"Class too large ({class_line_count}/{limits['max_class_lines']}). Split into smaller classes with single responsibilities.",
-                    }
-                )
+            if rules["max_class_lines"]:
+                issues.extend(analyze_max_class_lines(node, limits))
 
             if rules["max_complexity"] and complexity > limits["max_complexity"]:
                 issues.append(
@@ -201,7 +164,7 @@ def analyze_file(file_path, limits, rules):
                 {
                     "name": node.name,
                     "file": file_path,
-                    "lines": class_line_count,
+                    "lines": node.end_lineno - node.lineno + 1,
                     "issues": issues,
                 }
             )
@@ -209,19 +172,13 @@ def analyze_file(file_path, limits, rules):
             if rules["empty_except"]:
                 issues.extend(analyze_empty_except(node, limits))
 
-    file_line_count = len(source_code.splitlines())
     file_issues = []
 
-    if rules["max_file_lines"] and file_line_count > limits["max_file_lines"]:
-        file_issues.append(
-            {
-                "severity": "WARNING",
-                "message": f"File too large ({file_line_count}/{limits['max_file_lines']}). Split into modules or move unrelated code to separate files.",
-            }
-        )
+    if rules["max_file_lines"]:
+        file_issues = analyze_max_file_lines(source_code, limits)
 
     return (
         funcs,
-        [{"name": file_path, "lines": file_line_count, "issues": file_issues}],
+        [{"name": file_path, "lines": len(source_code.splitlines()), "issues": file_issues}],
         cls,
-    ) 
+    )

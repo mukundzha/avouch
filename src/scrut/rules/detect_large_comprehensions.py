@@ -25,6 +25,7 @@ def analyze(function_node, limits):
         if comprehension_size > limit:
             issues.append(
                 {
+                    "rule": "SCR005",
                     "severity": "WARNING",
                     "message": (
                         f"Large comprehension "
