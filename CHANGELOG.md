@@ -11,12 +11,20 @@ The format is inspired by Keep a Changelog.
   `SCR001`–`SCR016` range.
 - Per-rule toggles via a `[rules]` section in `scrut.toml`, so any rule
   can be disabled without touching code.
-- New rules:
+- New rules (11 new rule IDs; the five v0.2 checks were carried over):
   - `SCR001` async function without `await` expression
+  - `SCR002` bare `except`
+  - `SCR003` boolean expression too complex
+  - `SCR004` duplicate branch detection
   - `SCR005` large comprehension
+  - `SCR006` duplicate branch (class scope)
+  - `SCR007` long if/elif chain
   - `SCR008` lambda too complex
+  - `SCR009` too many local variables
   - `SCR015` nested function definition
   - `SCR016` too many return statements
+- Cyclomatic complexity checks for functions and classes
+  (`Function too complex`, `Class too complex`).
 - `AsyncFunctionDef` nodes are now analyzed.
 - `SCRUT_FONT` environment variable to request an optional terminal font
   switch (OSC 50) for the report.
