@@ -7,6 +7,7 @@ def is_gitrepo():
     )
     return result.returncode == 0
 
+
 def get_changed_files():
     result = subprocess.run(
         ["git", "diff", "HEAD", "--name-only"], capture_output=True, text=True
@@ -30,7 +31,7 @@ def get_reviewable_files(files):
     for file in files:
         path = Path(file)
 
-        if path.suffix == ".py" and path.exists():
+        if path.suffix == ".py"  and path.exists():
             reviewable.append(str(path))
 
     return reviewable

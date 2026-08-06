@@ -2,11 +2,13 @@
 
 **Review the Python you changed, not the Python you inherited.**
 
-Scrut is a zero-dependency CLI that reviews exactly the files your next
-commit will touch. It asks Git what changed, parses each changed `.py` file
-with the standard `ast` module, and reports structural problems against
-limits you set in `scrut.toml`. No daemon. No network. No path lists to
-maintain. Run it in the seconds before `git push`, fix what it flags, push.
+Scrut is a lightweight, Git-aware static analysis CLI for Python. It asks
+Git which files your next commit will touch, parses each changed `.py`
+file with the standard `ast` module, and reports structural problems
+against limits you configure in `scrut.toml`.
+
+No daemon. No network. No path lists to maintain. Run it in the seconds
+before `git push`, fix what it flags, push.
 
 ```bash
 pip install scrut
@@ -16,48 +18,50 @@ scrut
 
 ---
 
-## Project philosophy
+## Table of contents
 
-Scrut is built on five invariants. They are not features; they are the
-reasons the tool exists, and every design decision in the codebase
-reinforces them.
+- [Why it exists](#why-it-exists)
+- [Installation](#installation)
+- [Quick start](#quick-start)
+- [Configuration](#configuration)
+- [Rules](#rules)
+- [How it works](#how-it-works)
+- [Repository layout](#repository-layout)
+- [Adding a rule](#adding-a-rule)
+- [Testing](#testing)
+- [Roadmap](#roadmap)
+- [FAQ](#faq)
+- [Contributing](#contributing)
+- [License](#license)
 
-**1. The review set is the diff, not the repository.**
-A whole-repo linter reports pre-existing debt and buries the findings you
-just introduced under hundreds you didn't. Scrut computes its review set
-from Git at run time (`git diff HEAD --name-only` plus untracked files)
-and never asks you to configure it. Every finding in the output is
-attributable to work you are about to push. The tool reviews your commit,
-not your legacy.
+---
 
-**2. Metrics are exact, or they don't ship.**
-Structural questions are answered by the Python abstract syntax tree:
-parameter counts, nesting depth, line spans. Regex cannot count parentheses
-across lines, measure nesting, or tell a definition from a call. If a metric
-cannot be computed exactly from the AST, scrut does not claim it.
+## Why it exists
 
-**3. Errors are data, not exceptions.**
-An unreadable or syntactically broken file becomes an `ERROR` entry in the
-report. The run over N files always yields N file reports, and one broken
-file never cancels the review of the others.
-
-**4. Scrut reviews; it does not gate.**
-The exit code is always 0. Enforcement belongs in an explicit, opt-in
-interface (CI output and exit codes are on the roadmap), not in the default
-behavior of a tool you run before every push.
-
-**5. Zero dependencies is a feature.**
-Two `git` subprocess calls and the standard library. No lockfile to update,
-no supply chain to audit, no daemon to keep alive. Runtime is bounded by
-the size of your diff, not your repository.
+- **The review set is the diff, not the repository.** Scrut computes the
+  review set from Git at run time (`git diff HEAD --name-only` plus
+  untracked files). Every finding is attributable to work you are about
+  to push — never to the legacy you inherited.
+- **Metrics are exact.** Parameter counts, nesting depth, and line spans
+  come from the AST, not regex. If a metric cannot be computed exactly,
+  Scrut does not claim it.
+- **Errors are data.** An unreadable or syntactically broken file becomes
+  an `ERROR` entry in the report. One broken file never cancels the
+  review of the others.
+- **Scrut reviews; it does not gate.** The exit code is always `0`.
+  Enforcement belongs in an opt-in interface, not in a tool you run
+  before every push.
+- **The runtime is the standard library.** Three `git` subprocess calls
+  and
+  `ast`/`tomllib`. No daemon to keep alive; runtime is bounded by the
+  size of your diff, not your repository.
 
 ---
 
 ## Installation
 
-Requires **Python 3.10+** (the rules use `ast.Match`; configuration uses
-`tomllib`) and **Git on `PATH`**. No other dependencies exist or are
-installed.
+Requires **Python 3.10+** (rules use `ast.Match`; configuration uses
+`tomllib`) and **Git on `PATH`**.
 
 ```bash
 pip install scrut
@@ -75,7 +79,7 @@ Both register the `scrut` console script (`scrut.cli:main`).
 
 ---
 
-## Usage
+## Quick start
 
 The entire interface is one command with no arguments and no flags:
 
@@ -85,35 +89,55 @@ cd your-repo
 scrut
 ```
 
-No arguments is a property, not a limitation: the review set is defined by
-Git, so there is nothing to configure at invocation time.
+The review set is defined by Git, so there is nothing to configure at
+invocation time. Scrut reviews:
+
+- tracked files modified vs. `HEAD` (`git diff HEAD --name-only`), and
+- untracked `.py` files (`git ls-files --others --exclude-standard`).
+
+Deleted paths and non-`.py` files are skipped. Committed, untouched files
+never appear in the output.
 
 ### A run with findings
 
-```bash
-dev@scrut-demo:~/repo$ scrut
-```
-
-![scrut reporting two findings on a changed file](images/scrut-findings.png)
-
 ```text
-SCRUT [Review Summary] — 1 file(s) need attention
+$ scrut
 
-app.py
-  ⚠ handle_request() — Too many parameters (7/4)
-  ⚠ handle_request() — Nesting too deep (4/3)
+scrut [Review Summary]
+╔═════════════════════════════════════════╗
+║ 🟡 3 warnings      │ 📊 3 funcs checked ║
+╚═════════════════════════════════════════╝
+
+[NEEDS REVIEW] ────────────────────────────────────────────────────────────
+
+╭─ ⚠️ buggy.py (3)
+│  Component  Kind  Rule                                         Metric
+│  ────────────────────────────────────────────────────────────────────
+│  handle     func  Nesting too deep                                5/4
+│  fake       func  Async function contains no await expression  detected
+│  extra      func  Too many parameters                             6/5
 ```
+
+- **Summary box** — counts of errors, warnings, passed files, and
+  functions checked.
+- **`[NEEDS REVIEW]`** — one block per file with findings. `⚠️` for
+  warnings-only files, `🛑` for files with errors.
+- **Table columns** — `Component` (function, class, or `<file>`), `Kind`,
+  `Rule` (human-readable label), `Metric` (measured/limit, or `detected`
+  for rules without a threshold).
+- **`[PASSING]`** — files with no findings, as a multi-column grid that
+  adapts to terminal width and never exceeds four lines. Excess entries
+  collapse to `[+N more]`.
 
 ### A clean run
 
-```bash
-dev@scrut-demo:~/repo$ scrut
-```
-
-![scrut passing a clean commit](images/scrut-clean.png)
-
 ```text
-✓ All clean.
+$ scrut
+
+scrut [Review Summary]
+╔═══════════════════╗
+║ 🟢 All clean. ║
+╚═══════════════════╝
 ```
 
 ### Edge cases
@@ -129,252 +153,511 @@ No Python files to review.
 ```
 
 Colors are ANSI codes emitted only when stdout is a TTY. Piped output is
-plain, so `scrut | tee review.log` and CI capture work cleanly.
+plain, so `scrut | tee review.log` and CI capture work cleanly. The exit
+code is always `0`.
 
 ---
 
 ## Configuration
 
 Configuration is optional, partial, and declarative. Scrut looks for a
-`scrut.toml` file in the current working directory and merges it over the
-defaults:
-
-| Key | Default | Repo's own |
-|---|---|---|
-| `max_parameters` | 5 | 4 |
-| `max_nesting` | 4 | 5 |
-| `max_function_lines` | 50 | 50 |
-| `max_class_lines` | 200 | 50 |
-| `max_file_lines` | 400 | 50 |
-| `max_complexity` | 10 | 10 |
-| `max_boolean_conditions` | 5 | 5 |
+`scrut.toml` in the **current working directory** and merges it over the
+built-in defaults — any subset is valid. A malformed file raises instead
+of being silently ignored.
 
 ```toml
-# scrut.toml — any subset is valid
-[limits]
-max_parameters = 3
-max_nesting    = 4
+[limits]   # numeric thresholds per rule
+[rules]    # on/off toggle per rule
 ```
 
-`merge_limits()` copies the defaults and overlays your keys, so a single
-line is a complete, valid configuration. This repository lives by its own
-file, `scrut.toml` at the root:
+### Rule toggles
+
+| Key | Default | Rule |
+|-----|---------|------|
+| `async_without_await` | `true` | SCR001 |
+| `bare_except` | `true` | SCR002 |
+| `max_boolean_conditions` | `true` | SCR003 |
+| `detect_duplicateb` | `true` | SCR004 |
+| `max_large_comprehensions` | `true` | SCR005 |
+| `empty_except` | `true` | SCR006 |
+| `max_if_else_chain` | `true` | SCR007 |
+| `max_lambda_nodes` | `true` | SCR008 |
+| `max_local_variables` | `true` | SCR009 |
+| `max_class_lines` | `true` | SCR010 |
+| `max_file_lines` | `true` | SCR011 |
+| `max_function_lines` | `true` | SCR012 |
+| `max_nesting` | `true` | SCR013 |
+| `max_parameters` | `true` | SCR014 |
+| `nested_function` | `true` | SCR015 |
+| `max_return_statements` | `true` | SCR016 |
+| `max_complexity` | `true` | function/class complexity |
+
+Setting a toggle to `false` disables that rule's findings. A one-line
+`[rules]` section is a complete, valid configuration.
+
+### Limits
+
+| Key | Default | Rule | Meaning |
+|-----|---------|------|---------|
+| `max_parameters` | 5 | SCR014 | Max positional + keyword params |
+| `max_nesting` | 4 | SCR013 | Max block nesting depth |
+| `max_function_lines` | 50 | SCR012 | Max function line span |
+| `max_class_lines` | 200 | SCR010 | Max class line span |
+| `max_file_lines` | 400 | SCR011 | Max file line count |
+| `max_complexity` | 10 | — | Max cyclomatic complexity |
+| `max_boolean_conditions` | 5 | SCR003 | Max operands in one chain |
+| `max_if_else_chain` | 5 | SCR007 | Max if/elif links |
+| `max_local_variables` | 15 | SCR009 | Max distinct assigned names |
+| `max_return_statements` | 3 | SCR016 | Max `return`s per function |
+| `max_lambda_nodes` | 5 | SCR008 | Max AST nodes in a lambda body |
+| `max_large_comprehensions` | 10 | SCR005 | Max AST nodes in a comprehension |
+
+Limits are applied by key. A rule whose limit key is absent from the
+merged config falls back to the limit hardcoded in its own module, so a
+partial `[limits]` never turns a rule off.
+
+### Example
 
 ```toml
+# scrut.toml — the exact file this repository lives by
 [limits]
-max_parameters      = 4
-max_nesting         = 5
-max_function_lines  = 50
-max_class_lines     = 50
-max_file_lines      = 50
-max_complexity      = 10
-```
+max_parameters          = 4
+max_nesting             = 5
+max_function_lines      = 50
+max_class_lines         = 50
+max_file_lines          = 50
+max_complexity          = 10
+max_boolean_conditions  = 6
+max_local_variables     = 15
+max_return_statements   = 6
+max_lambda_nodes        = 10
+max_large_comprehensions = 12
 
-Two documented constraints: the file is resolved from the current working
-directory only (upward search is on the roadmap), and a malformed file
-raises rather than being silently ignored.
+[rules]
+max_parameters          = true
+max_nesting             = false
+max_function_lines      = false
+max_class_lines         = true
+max_file_lines          = true
+max_complexity          = false
+max_boolean_conditions  = true
+max_local_variables     = true
+max_return_statements   = true
+max_lambda_nodes        = true
+max_large_comprehensions = true
+```
 
 ---
 
-## Rules: what scrut checks
+## Rules
 
-Eight rules, each emitting a `WARNING`. All but the bare-except rule embed
-the measured value and the limit, so every line of the report is
-self-explanatory without context:
+Scrut ships 16 rule identifiers (SCR001–SCR016) plus two cyclomatic
+complexity checks on functions and classes sharing the `max_complexity`
+limit. Every rule finding is a `WARNING`; `ERROR` findings exist only for
+files that cannot be read or parsed. Rules with a threshold render
+`measured/limit`; presence-based rules render `detected`.
 
-| Rule | Message format | Default |
-|---|---|---|
-| Function length | `Function too long (N/limit)` | 50 lines |
-| Parameter count | `Too many parameters (N/limit)` | 5 |
-| Nesting depth | `Nesting too deep (N/limit)` | 4 levels |
-| Class size | `Class too large (N/limit)` | 200 lines |
-| File size | `File too large (N/limit)` | 400 lines |
-| Complexity | `Function too complex (N/limit)` | 10 |
-| Boolean complexity | `Boolean expression too complex (N/limit)` | 5 |
-| Bare except | `Bare except catches every exception. Catch a specific exception instead.` | none |
+| ID | Rule | Limit | Scope | Metric |
+|----|------|-------|-------|--------|
+| SCR001 | Async without await | — | async funcs | `detected` |
+| SCR002 | Bare except | — | funcs | `detected` |
+| SCR003 | Boolean expression too complex | 5 | funcs, classes | `N/limit` |
+| SCR004 | Duplicate branch | — | funcs | `detected` |
+| SCR005 | Large comprehension | 10 | funcs | `N/limit` |
+| SCR006 | Duplicate branch | — | funcs, classes | `detected` |
+| SCR007 | Long if/elif chain | 5 | funcs, classes | `N/limit` |
+| SCR008 | Lambda too complex | 5 | funcs | `N/limit` |
+| SCR009 | Too many local variables | 15 | funcs | `N/limit` |
+| SCR010 | Class too large | 200 | classes | `N/limit` |
+| SCR011 | File too large | 400 | files | `N/limit` |
+| SCR012 | Function too long | 50 | funcs | `N/limit` |
+| SCR013 | Nesting too deep | 4 | funcs | `N/limit` |
+| SCR014 | Too many parameters | 5 | funcs | `N/limit` |
+| SCR015 | Nested function definition | — | funcs | `detected` |
+| SCR016 | Too many return statements | 3 | funcs | `N/limit` |
+| — | Function too complex | 10 | funcs | `N/limit` |
+| — | Class too complex | 10 | classes | `N/limit` |
 
-### Complexity: McCabe cyclomatic
+### SCR001 — Async without await
 
-`calculate_complexity()` counts decision points the way McCabe intended:
-base 1, then +1 for every `if`/`elif`, ternary, `for`, `while`, `with`,
-`assert`, `try`, each `except` handler, each `match`, and each `and`/`or`
-chain. The count is a walk over the whole subtree: decisions inside a
-nested function count toward the enclosing one, and a class's complexity
-is the sum over its entire body, methods included — `Class too complex`
-fires when the whole class is over the limit.
+Flags `async def` functions that never `await`. An async function without
+an `await` runs synchronously while still incurring event-loop overhead.
 
-### Boolean expressions: operand count per chain
+```python
+# bad
+async def fetch_config():
+    return json.load(open("config.json"))
 
-`count_boolean_conditions()` measures a single `and`/`or` chain: every
-operand contributes 1 and nested chains sum their operands, so `a and b`
-scores 2 and `a and (b or c)` scores 3. `Boolean expression too complex
-(N/limit)` fires when any chain exceeds `max_boolean_conditions` (default
-5). Functions and classes are both checked.
-
-### Bare except
-
-`analyze_bare_except()` walks a function and flags every `except:` handler
-that catches nothing specific. There is no limit to configure: the rule is
-binary and applies to every function, including methods.
-
-### Nesting: maximum depth, not block count
-
-`get_depth()` is a recursive maximum over the tree. A node adds a level
-only if it is one of the eight `BLOCK_NODES`:
-
-```
-If · For · While · AsyncFor · With · AsyncWith · Try · Match
+# good
+def fetch_config():
+    return json.load(open("config.json"))
 ```
 
-Comprehensions, lambdas, and nested `def` statements do **not** add depth,
-and sibling blocks do not stack. The metric is maximum nesting depth, not
-block count: a 4-deep comprehension chain is data transformation, not
-tangled control flow.
+### SCR002 — Bare except
 
-### Parameters: positional and keyword arguments only
+Flags `except:` handlers that catch every exception — including
+`KeyboardInterrupt` and `SystemExit`.
 
-The count is `len(node.args.args)`. `*args`, `**kwargs`, keyword-only
-parameters, and `self` are excluded — the rule measures the arguments that
-make a call hard to read, not the signature's machinery.
+```python
+# bad
+try:
+    return json.loads(raw)
+except:
+    return None
 
-### Error containment
+# good
+try:
+    return json.loads(raw)
+except (ValueError, TypeError):
+    return None
+```
 
-A file that cannot be read or parsed becomes an `ERROR` entry (`Could not
-read file`, `Python syntax error`) while the run continues. `ERROR`
-findings render with a red `✖`; warnings with a yellow `⚠`.
+### SCR003 — Boolean expression too complex
+
+Flags a single `and`/`or` chain with too many operands. Nested chains sum
+their operands, so `a and (b or c)` scores 3.
+
+```python
+# bad — 6 operands
+if a and b and c and d and e and f:
+    launch()
+
+# good
+if is_ready(a, b, c) and has_clearance(d, e, f):
+    launch()
+```
+
+### SCR004 / SCR006 — Duplicate branch
+
+Flags `if`/`elif` branches whose bodies are identical — a copy-paste or a
+condition that never varies. Two rule IDs cover the same detection:
+SCR004 (`detect_duplicateb`) runs on functions; SCR006 (`empty_except`)
+runs on functions and classes. Both emit the same finding, and the
+report deduplicates identical rows, so one violation renders once.
+
+```python
+# bad
+if kind == "csv":
+    rows = read_csv(path)
+elif kind == "json":
+    rows = read_csv(path)      # copy-paste
+
+# good
+if kind in ("csv", "json"):
+    rows = read_csv(path)
+```
+
+### SCR005 — Large comprehension
+
+Flags list/set/dict comprehensions and generator expressions whose AST
+node count exceeds `max_large_comprehensions` (default 10). Past a few
+nested clauses a comprehension stops being an expression and becomes a
+program.
+
+```python
+# bad
+result = [
+    [x * 100 for x in row if x != 0]
+    for row in matrix
+    if row and any(v > limit for v in row)
+]
+
+# good
+def scale_row(row, factor):
+    return [x * factor for x in row if x != 0]
+
+result = [scale_row(row, 100) for row in matrix if row]
+```
+
+### SCR007 — Long if/elif chain
+
+Flags if/elif chains longer than `max_if_else_chain` (default 5).
+
+```python
+# bad
+if status == "ok":
+    ...
+elif status == "warn":
+    ...
+elif status == "error":
+    ...
+elif status == "fatal":
+    ...
+elif status == "timeout":
+    ...
+else:
+    ...
+
+# good
+status_actions = {"ok": ok_action, "warn": warn_action}
+status_actions.get(status, unknown_action)()
+```
+
+### SCR008 — Lambda too complex
+
+Flags `lambda` bodies exceeding `max_lambda_nodes` (default 5) AST nodes.
+
+```python
+# bad
+transform = lambda v: v.strip().lower().split(",") if "," in v else [v]
+
+# good
+def transform(v):
+    return v.strip().lower().split(",") if "," in v else [v]
+```
+
+### SCR009 — Too many local variables
+
+Flags functions assigning more than `max_local_variables` (default 15)
+distinct names — every new name is cognitive load and a chance for
+shadowing. Fix: extract groups of assignments into helpers.
+
+### SCR010 — Class too large
+
+Flags classes whose line span exceeds `max_class_lines` (default 200).
+A class past ~200 lines is usually several classes; fix by splitting by
+responsibility.
+
+### SCR011 — File too large
+
+Flags files exceeding `max_file_lines` (default 400). Fix: split into
+modules with single concerns.
+
+### SCR012 — Function too long
+
+Flags functions whose line span exceeds `max_function_lines` (default
+50). Fix: extract helpers — `process_order` becomes `validate`,
+`reserve`, and `send`.
+
+### SCR013 — Nesting too deep
+
+Flags maximum nesting depth of block nodes above `max_nesting` (default
+4). Depth counts `if`, `for`, `while`, `async for`, `with`, `async
+with`, `try`, and `match` only. Comprehensions, lambdas, and nested
+`def`s do **not** add depth; sibling blocks do not stack — the metric is
+maximum depth, not block count.
+
+```python
+# bad — 5 deep
+with open(path) as f:               # 1
+    for row in f:                   # 2
+        if row.startswith("#"):     # 3
+            try:                    # 4
+                parse(row)          # 5
+
+# good — early-return guards flatten it
+def line_ready(row):
+    if not row:
+        return False
+    if row.startswith("#"):
+        return False
+    return True
+
+with open(path) as f:
+    for row in f:
+        if line_ready(row):
+            parse(row)
+```
+
+### SCR014 — Too many parameters
+
+Flags functions with more than `max_parameters` (default 5) positional or
+keyword parameters. `*args`, `**kwargs`, `self`, and keyword-only
+parameters are excluded — the rule measures what makes calls hard to
+read.
+
+```python
+# bad
+def connect(host, port, user, password, db, timeout):
+    ...
+
+# good
+@dataclass
+class Connection:
+    host: str
+    port: int
+    user: str
+    password: str
+    db: str
+
+def connect(cfg: Connection, timeout: int) -> None: ...
+```
+
+### SCR015 — Nested function definition
+
+Flags a function defined inside another function. Closures that capture
+their enclosing scope run once per outer call and defeat unit testing.
+
+```python
+# bad
+def process_all(data):
+    def normalize(value):
+        return value.strip().lower()
+    return [normalize(x) for x in data]
+
+# good
+def normalize(value):
+    return value.strip().lower()
+
+def process_all(data):
+    return [normalize(x) for x in data]
+```
+
+### SCR016 — Too many return statements
+
+Flags functions with more than `max_return_statements` (default 3)
+`return`s — every exit point is a path to maintain.
+
+### Function / Class too complex — cyclomatic complexity
+
+Flags functions and classes whose McCabe cyclomatic complexity exceeds
+`max_complexity` (default 10). Base 1, then +1 for every `if`, `for`,
+`while`, `try`, `except` handler, `match`, ternary, `assert`, `with`,
+and every extra `and`/`or` operand. The walk covers the whole subtree:
+a class's complexity is the sum over its entire body, methods included.
 
 ---
 
-## Architecture
+## How it works
 
-The codebase is deliberately small: nine modules, one entry point, no
-dependencies. The governing rule is that **`cli.py` only orchestrates** —
-every function it calls lives in another module, and nothing imports
-`cli.py`. That is what keeps all 34 tests fast and mock-light.
+The codebase is deliberately small: a CLI orchestrator, three pipeline
+modules, two config modules, and one rule per file. The governing rule is
+that **`cli.py` only orchestrates** — every function it calls lives in
+another module, and nothing imports `cli.py`.
 
 ```mermaid
 flowchart LR
-    G[git.py<br/>review set: git diff HEAD + untracked] --> A[analyzer.py<br/>AST · eight rules]
-    C[config<br/>scrut.toml + defaults] --> A
-    A --> R[report.py<br/>colored report]
+    G[git.py<br/>review set: git diff HEAD + untracked] --> A[analyzer.py<br/>AST walk · rule dispatch]
+    C[config/<br/>scrut.toml + defaults] --> A
+    A --> R[report.py<br/>terminal report]
 ```
 
-| Module | Role | Exports |
-|---|---|---|
+| Module | Role | Key exports |
+|--------|------|-------------|
 | `cli.py` | Pipeline wiring | `main()` |
 | `git.py` | Git interaction | `is_gitrepo`, `get_changed_files`, `get_reviewable_files` |
-| `analyzer.py` | AST analysis | `BLOCK_NODES`, `read_file`, `get_depth`, `analyze_file` |
-| `rules/complexity.py` | Cyclomatic complexity | `calculate_complexity` |
-| `rules/boolean_complexity.py` | Boolean-chain measurement | `analyze`, `count_boolean_conditions` |
-| `rules/bare_except.py` | Bare-except detection | `analyze` |
-| `report.py` | Output rendering | `render_report`, `generate_report` |
+| `analyzer.py` | AST analysis | `read_file`, `analyze_file` |
+| `rules/*.py` | One rule per module | `analyze(node, limits)` |
+| `report.py` | Terminal rendering | `render_report`, `generate_report` |
 | `config/default.py` | Default limits | `DEFAULT_LIMITS` |
-| `config/loader.py` | TOML loading + merge | `load_config`, `merge_limits` |
+| `config/loader.py` | TOML load + merge | `load_config`, `merge_limits`, `merge_rules`, `DEFAULT_RULES` |
 
-### Repository layout
+### Pipeline
+
+1. `cli.main()` loads config (`limits` + `rules` merged over defaults).
+2. `git.is_gitrepo()` — `git rev-parse --is-inside-work-tree`; exits the
+   run with a message if not a repo.
+3. `git.get_changed_files()` — `git diff HEAD --name-only` plus untracked
+   files; `get_reviewable_files()` keeps existing `.py` paths.
+4. Per file, `analyzer.analyze_file(path, limits, rules)`:
+   - reads UTF-8 (`OSError` → `ERROR` report), parses with `ast.parse`
+     (`SyntaxError` → `ERROR` report; the rest of the run continues),
+   - walks the AST once with `ast.walk`, dispatching `FunctionDef`,
+     `AsyncFunctionDef`, and `ClassDef` nodes to their rules (rule
+     toggles are checked before dispatch, so disabled rules never run),
+   - returns `(function_reports, file_reports, class_reports)`.
+5. `report.render_report(...)` groups issues by file in a single pass,
+   counts severities, and renders the summary box, `[NEEDS REVIEW]`
+   tables, and `[PASSING]` grid.
+
+### Reporting details
+
+Table rendering is width-aware: column widths come from displayed
+character width (emoji/wide glyphs count double), long values truncate
+with `…` so tables never wrap, and the Metric column is dropped entirely
+when no row carries a metric. Identical `(component, rule, metric)` rows
+are deduplicated; file-level rows sort first. `SCRUT_FONT=name` is an
+opt-in OSC 50 font switch honored only by capable terminals.
+
+---
+
+## Repository layout
 
 ```
 scrut/
-├── pyproject.toml          # packaging, entry point, pytest config
+├── pyproject.toml          # packaging, console script
 ├── scrut.toml              # limits this repo lives by
-├── cx-demo/                # scratch demos for end-to-end runs
 ├── src/scrut/
 │   ├── cli.py              # entry point; orchestration only
-│   ├── git.py              # is_gitrepo, get_changed_files, get_reviewable_files
-│   ├── analyzer.py         # BLOCK_NODES, read_file, get_depth, analyze_file
-│   ├── rules/
-│   │   ├── complexity.py        # calculate_complexity (McCabe)
-│   │   ├── boolean_complexity.py  # analyze, count_boolean_conditions
-│   │   └── bare_except.py       # analyze
-│   ├── report.py           # render_report, generate_report
+│   ├── git.py              # review-set computation
+│   ├── analyzer.py         # AST walk, rule dispatch
+│   ├── report.py           # terminal report UI
+│   ├── rules/              # one module per rule
+│   │   ├── complexity.py           # cyclomatic metric (no issues itself)
+│   │   ├── max_nesting.py          # get_depth + BLOCK_NODES
+│   │   └── ...                     # one analyze(node, limits) per rule
 │   └── config/
 │       ├── default.py      # DEFAULT_LIMITS
-│       └── loader.py       # load_config, merge_limits
+│       └── loader.py       # load_config, merge_limits, merge_rules
 └── tests/
-    └── test_git.py         # 34 tests
+    └── test_git.py         # 36 tests, incl. a real-git end-to-end run
 ```
 
 ---
 
-## Contributing
+## Adding a rule
 
-### Setup
+A rule is a module in `src/scrut/rules/` exposing
+`analyze(node, limits) -> list[issue]`, where an issue is:
+
+```python
+{"rule": "SCR017", "severity": "WARNING",
+ "message": "Description (value/limit). Remediation guidance."}
+```
+
+Plus a `[rules]` toggle in `DEFAULT_RULES` (and a limit in
+`DEFAULT_LIMITS` if the rule has a threshold). Wire the dispatch into
+`analyze_file` with a toggle guard, then write the tests: one for the
+violation, one for the boundary. The renderer displays any
+`(severity, message)` pair it receives, so no report code changes.
+
+---
+
+## Testing
+
+All 36 tests run in a fraction of a second — no network, no package
+installs:
 
 ```bash
-git clone https://github.com/mukundzha/scrut.git
-cd scrut
 pip install -e .
 python -m pytest tests/
 ```
 
-### The test suite
-
-All 34 tests run in a fraction of a second, with no network and no package
-installs; 32 pass today. Two complexity tests still encode the previous
-pruned traversal (nested `def`s excluded, one point per `match` case) and
-await realignment with the current walk-based metric. Coverage includes
-the git helpers, config merging, all eight nesting block types, every
-complexity decision point, boolean-chain measurement, bare-except
-detection, every analysis failure path, report output, and an end-to-end
-run against a **real temporary git repository** — Git itself is not
-mocked. Mocking is limited to `subprocess.run` where a real Git isn't
-needed.
-
-### Conventions
-
-- **Tests before code.** A fix that cannot be expressed as a failing test
-  first is not a fix yet.
-- **Keep the diff small.** This codebase has nine modules for a reason.
-  A change that touches more than two of them needs a justification in the
-  PR description.
-- **Zero dependencies is the contract.** No new runtime dependencies
-  without a written case that survives the philosophy section of this
-  README.
-- **The README is the spec.** If the behavior changed, the README changes
-  in the same commit.
-
-### Adding a rule
-
-A rule is a few lines inside the `analyze_file` walk plus a default in
-`DEFAULT_LIMITS` (or a `scrut.toml` key). Rules with real measurement
-logic live in `scrut/rules/` behind an `analyze(node, limits)` signature —
-cyclomatic complexity, boolean-chain measurement, and bare-except
-detection all follow it. The renderer displays any `(severity, message)`
-pair it receives, so no report code changes. Write the test first: one
-for the violation, one for the boundary.
+Coverage includes the git helpers, config merging, every nesting block
+type, every complexity decision point, boolean-chain measurement,
+rule boundaries, analysis failure paths (unreadable/syntax-error files),
+report output, and an end-to-end run against a **real temporary git
+repository** — Git itself is not mocked. Mocking is limited to
+`subprocess.run` where a real Git isn't needed.
 
 ---
 
 ## Roadmap
 
-Informed by the documented limitations, ordered by the pain they remove:
+Informed by documented limitations, ordered by the pain they remove:
 
-**0.2 — Configuration and review-set hardening**
+**0.4 — Configuration hardening**
 - Validate `scrut.toml` values with readable errors (today: a malformed
   file raises)
-- Search upward from the working directory for `scrut.toml` (today:
-  CWD only)
-
-**0.3 — Metric completeness**
-- Count `*args`, `**kwargs`, and keyword-only parameters
-- Analyze `AsyncFunctionDef` (today: skipped)
+- Search upward from the working directory for `scrut.toml` (today: CWD
+  only)
 
 **1.0 — CI-grade interface**
 - `--json` output for tooling
 - Configurable exit codes, so enforcement is possible without changing
   scrut's review-only default
 
-The rule ceiling is raised deliberately, not by accretion; each new rule
-must survive the philosophy section.
+New rules must survive the philosophy section — the ceiling is raised
+deliberately, not by accretion.
 
 ---
 
 ## FAQ
 
 **Why only changed files?**
-Pre-existing issues are noise. A whole-repo run buries the few findings you
-introduced under hundreds you didn't. The review set is the diff, so the
-output is always relevant to the next push.
+Pre-existing issues are noise. A whole-repo run buries the few findings
+you introduced under hundreds you didn't. The review set is the diff, so
+the output is always relevant to the next push.
 
 **Why `git diff HEAD` and not `git diff`?**
 Plain `git diff` covers only unstaged changes. `HEAD` covers staged plus
@@ -382,9 +665,9 @@ unstaged — the complete set of files about to be pushed — and scrut adds
 untracked files on top, so brand-new files are never missed.
 
 **Why AST instead of regex?**
-Regex cannot count parentheses across lines, measure nesting, or distinguish
-a definition from a call. The AST answers structural questions exactly for
-every valid Python file.
+Regex cannot count parentheses across lines, measure nesting, or
+distinguish a definition from a call. The AST answers structural
+questions exactly for every valid Python file.
 
 **Why always exit 0?**
 Scrut is a reviewer, not a gate. CI enforcement belongs in an explicit
@@ -392,8 +675,31 @@ feature (`--json`, configurable exit codes — see Roadmap), not in the
 default behavior.
 
 **Does it need a network or a daemon?**
-No. Two `git` subprocess calls and the standard library. Runtime is bounded
-by the size of your diff, not your repository.
+No. Three `git` subprocess calls and the standard library. Runtime is
+bounded by the size of your diff, not your repository.
+
+---
+
+## Contributing
+
+- **Tests before code.** A fix that cannot be expressed as a failing test
+  first is not a fix yet.
+- **Keep the diff small.** A change that touches more than two modules
+  needs a justification in the PR description.
+- **The standard-library runtime is the contract.** No new runtime
+  dependencies without a written case that survives the philosophy
+  section.
+- **The README is the spec.** If the behavior changed, the README changes
+  in the same commit.
+
+Setup:
+
+```bash
+git clone https://github.com/mukundzha/scrut.git
+cd scrut
+pip install -e .
+python -m pytest tests/
+```
 
 ---
 
