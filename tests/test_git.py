@@ -5,7 +5,7 @@ from unittest.mock import Mock, patch
 from scrut.analyzer import analyze_file, get_depth, read_file
 from scrut.git import get_changed_files, get_reviewable_files, is_gitrepo
 from scrut.report import generate_report
-from scrut.cli import main
+from scrut.cli import main, SUCCESS, VIOLATIONS_FOUND, ERROR
 from scrut.config.default import DEFAULT_LIMITS
 from scrut.config.loader import load_config, merge_limits, DEFAULT_RULES
 from scrut.rules.complexity import calculate_complexity
@@ -496,6 +496,30 @@ def test_main_with_real_git_repo(tmp_path, monkeypatch, capsys):
 
     monkeypatch.chdir(tmp_path)
 
-    main()
+    result = main()
 
     assert "All clean." in capsys.readouterr().out
+    assert result == SUCCESS
+
+
+def test_main_returns_1_on_violations(tmp_path, monkeypatch, capsys):
+
+    body = "".join(f"    if x{i}:\n        pass\n" for i in range(10))
+    bad = tmp_path / "bad.py"
+    bad.write_text("def f(x):\n" + body)
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        "scrut.git.subprocess.run",
+        lambda *a, **k: Mock(returncode=0, stdout="bad.py\n"),
+    )
+
+    assert main() == VIOLATIONS_FOUND
+    assert "Function too complex" in capsys.readouterr().out
+
+
+@patch("scrut.cli.is_gitrepo", return_value=False)
+def test_main_returns_2_on_error(mock_is_gitrepo, capsys):
+
+    assert main() == ERROR
+    assert "Not inside a Git repository." in capsys.readouterr().out

@@ -3,6 +3,10 @@ from scrut.config.default import DEFAULT_LIMITS
 from scrut.analyzer import analyze_file
 from scrut.report import generate_report
 from scrut.git import is_gitrepo, get_changed_files, get_reviewable_files
+
+SUCCESS = 0
+VIOLATIONS_FOUND = 1
+ERROR = 2
        
 def main():
 
@@ -12,14 +16,14 @@ def main():
 
     if not is_gitrepo():
         print("Not inside a Git repository.")
-        return
+        return ERROR
 
     changed_files = get_changed_files()
     reviewable_files = get_reviewable_files(changed_files)
 
     if not reviewable_files:
         print("No Python files to review.")
-        return
+        return ERROR
 
     file_reports = []
     functions_reports = []
@@ -33,7 +37,14 @@ def main():
 
     generate_report(functions_reports, file_reports, class_reports)
 
+    reports = class_reports + functions_reports + file_reports
+
+    if any(report["issues"] for report in reports):
+        return VIOLATIONS_FOUND
+
+    return SUCCESS
+
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
 
