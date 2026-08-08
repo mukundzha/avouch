@@ -1,4 +1,5 @@
 import ast
+import json
 import subprocess
 from unittest.mock import Mock, patch
 
@@ -468,7 +469,7 @@ def test_main_with_mocked_git(tmp_path, monkeypatch, capsys):
         lambda *a, **k: Mock(returncode=0, stdout="good.py\nbroken.py\n"),
     )
 
-    main()
+    main([])
 
     out = capsys.readouterr().out
 
@@ -496,7 +497,7 @@ def test_main_with_real_git_repo(tmp_path, monkeypatch, capsys):
 
     monkeypatch.chdir(tmp_path)
 
-    result = main()
+    result = main([])
 
     assert "All clean." in capsys.readouterr().out
     assert result == SUCCESS
@@ -514,12 +515,109 @@ def test_main_returns_1_on_violations(tmp_path, monkeypatch, capsys):
         lambda *a, **k: Mock(returncode=0, stdout="bad.py\n"),
     )
 
-    assert main() == VIOLATIONS_FOUND
+    assert main([]) == VIOLATIONS_FOUND
     assert "Function too complex" in capsys.readouterr().out
 
 
 @patch("scrut.cli.is_gitrepo", return_value=False)
 def test_main_returns_2_on_error(mock_is_gitrepo, capsys):
 
-    assert main() == ERROR
+    assert main([]) == ERROR
+    assert "Not inside a Git repository." in capsys.readouterr().out
+
+
+def _main_json(tmp_path, monkeypatch, stdout):
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        "scrut.git.subprocess.run",
+        Mock(
+            side_effect=[
+                Mock(returncode=0, stdout=""),
+                Mock(returncode=0, stdout=stdout),
+                Mock(returncode=0, stdout=""),
+            ]
+        ),
+    )
+
+    return main(["--json"])
+
+
+def test_main_json_clean(tmp_path, monkeypatch, capsys):
+
+    (tmp_path / "good.py").write_text("def ok():\n    pass\n")
+
+    assert _main_json(tmp_path, monkeypatch, "good.py\n") == SUCCESS
+
+    data = json.loads(capsys.readouterr().out)
+
+    assert data["version"] == 1
+    assert data["violations"] == []
+    assert data["summary"] == {
+        "total": 0,
+        "errors": 0,
+        "warnings": 0,
+        "files_with_violations": 0,
+    }
+
+
+def test_main_json_single_violation(tmp_path, monkeypatch, capsys):
+
+    body = "".join(f"    if x{i}:\n        pass\n" for i in range(10))
+    (tmp_path / "bad.py").write_text("def f(x):\n" + body)
+
+    assert _main_json(tmp_path, monkeypatch, "bad.py\n") == VIOLATIONS_FOUND
+
+    data = json.loads(capsys.readouterr().out)
+    violation = data["violations"][0]
+
+    assert data["summary"]["total"] == 1
+    assert violation["severity"] == "WARNING"
+    assert "Function too complex" in violation["message"]
+    assert violation["file"] == "bad.py"
+    assert violation["name"] == "f"
+    assert violation["kind"] == "func"
+
+
+def test_main_json_multiple_violations_one_file(tmp_path, monkeypatch, capsys):
+
+    (tmp_path / "scrut.toml").write_text(
+        "[limits]\nmax_parameters = 1\nmax_function_lines = 1\n"
+    )
+    (tmp_path / "a.py").write_text("def f(a, b):\n    pass\n")
+
+    assert _main_json(tmp_path, monkeypatch, "a.py\n") == VIOLATIONS_FOUND
+
+    data = json.loads(capsys.readouterr().out)
+    messages = [v["message"] for v in data["violations"]]
+
+    assert data["summary"]["total"] == 2
+    assert any("Function too long" in m for m in messages)
+    assert any("Too many parameters" in m for m in messages)
+
+
+def test_main_json_multiple_files(tmp_path, monkeypatch, capsys):
+
+    (tmp_path / "scrut.toml").write_text("[limits]\nmax_parameters = 1\n")
+    (tmp_path / "a.py").write_text("def f(a, b):\n    pass\n")
+    (tmp_path / "b.py").write_text("def g(c, d):\n    pass\n")
+
+    assert _main_json(tmp_path, monkeypatch, "a.py\nb.py\n") == VIOLATIONS_FOUND
+
+    data = json.loads(capsys.readouterr().out)
+
+    assert {v["file"] for v in data["violations"]} == {"a.py", "b.py"}
+    assert all(v["rule"] == "SCR014" for v in data["violations"])
+    assert data["summary"] == {
+        "total": 2,
+        "errors": 0,
+        "warnings": 2,
+        "files_with_violations": 2,
+    }
+
+
+@patch("scrut.cli.is_gitrepo", return_value=False)
+def test_main_json_error_exit_code(mock_is_gitrepo, capsys):
+
+    assert main(["--json"]) == ERROR
     assert "Not inside a Git repository." in capsys.readouterr().out

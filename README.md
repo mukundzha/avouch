@@ -23,6 +23,7 @@ scrut
 - [Why it exists](#why-it-exists)
 - [Installation](#installation)
 - [Quick start](#quick-start)
+- [JSON output](#json-output)
 - [Configuration](#configuration)
 - [Rules](#rules)
 - [How it works](#how-it-works)
@@ -48,9 +49,9 @@ scrut
 - **Errors are data.** An unreadable or syntactically broken file becomes
   an `ERROR` entry in the report. One broken file never cancels the
   review of the others.
-- **Scrut reviews; it does not gate.** The exit code is always `0`.
-  Enforcement belongs in an opt-in interface, not in a tool you run
-  before every push.
+- **Scrut reviews; it does not gate.** The exit code signals the outcome —
+  `0` clean, `1` violations found, `2` Scrut error — but enforcement belongs
+  in an opt-in interface, not in a tool you run before every push.
 - **The runtime is the standard library.** Three `git` subprocess calls
   and
   `ast`/`tomllib`. No daemon to keep alive; runtime is bounded by the
@@ -81,7 +82,7 @@ Both register the `scrut` console script (`scrut.cli:main`).
 
 ## Quick start
 
-The entire interface is one command with no arguments and no flags:
+The entire interface is one command with a single optional flag:
 
 ```bash
 cd your-repo
@@ -154,7 +155,49 @@ No Python files to review.
 
 Colors are ANSI codes emitted only when stdout is a TTY. Piped output is
 plain, so `scrut | tee review.log` and CI capture work cleanly. The exit
-code is always `0`.
+code is `0` when the review is clean, `1` when findings are reported, and
+`2` when Scrut cannot run.
+
+---
+
+## JSON output
+
+For automation and CI, `--json` prints the review as a single JSON document
+on stdout, with no human-readable text mixed in:
+
+```bash
+scrut --json
+```
+
+```json
+{
+  "version": 1,
+  "violations": [
+    {
+      "rule": "SCR014",
+      "severity": "WARNING",
+      "message": "Too many parameters (6/5). Group related parameters into a data class or dictionary.",
+      "file": "buggy.py",
+      "name": "extra",
+      "kind": "func"
+    }
+  ],
+  "summary": {
+    "total": 1,
+    "errors": 0,
+    "warnings": 1,
+    "files_with_violations": 1
+  }
+}
+```
+
+Each violation carries the rule id (or a human-readable label when the
+finding has none), its severity, the message, the file, the component name,
+and its kind (`func`, `class`, or `file`) — the same component and kind
+shown in the human table. `files_with_violations` is the number of distinct
+files containing at least one violation. Exit codes behave exactly as in
+normal mode, so `scrut --json` can gate CI: parse stdout for the findings
+and react to the exit status (`0` clean, `1` violations, `2` Scrut error).
 
 ---
 
@@ -643,9 +686,8 @@ Informed by documented limitations, ordered by the pain they remove:
   only)
 
 **1.0 — CI-grade interface**
-- `--json` output for tooling
-- Configurable exit codes, so enforcement is possible without changing
-  scrut's review-only default
+- Configurable exit codes, so enforcement thresholds can be tuned without
+  changing scrut's review-only default
 
 New rules must survive the philosophy section — the ceiling is raised
 deliberately, not by accretion.
@@ -669,10 +711,11 @@ Regex cannot count parentheses across lines, measure nesting, or
 distinguish a definition from a call. The AST answers structural
 questions exactly for every valid Python file.
 
-**Why always exit 0?**
-Scrut is a reviewer, not a gate. CI enforcement belongs in an explicit
-feature (`--json`, configurable exit codes — see Roadmap), not in the
-default behavior.
+**What are the exit codes?**
+Scrut returns `0` when the review is clean, `1` when findings are
+reported, and `2` when Scrut cannot run. It still reviews rather than
+gates — enforcement stays in whatever calls it — but CI can now react to
+the outcome directly.
 
 **Does it need a network or a daemon?**
 No. Three `git` subprocess calls and the standard library. Runtime is

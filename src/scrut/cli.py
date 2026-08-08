@@ -1,14 +1,21 @@
+import argparse
+
 from scrut.config.loader import DEFAULT_RULES, load_config
 from scrut.config.default import DEFAULT_LIMITS
 from scrut.analyzer import analyze_file
-from scrut.report import generate_report
+from scrut.report import generate_report, render_json
 from scrut.git import is_gitrepo, get_changed_files, get_reviewable_files
 
 SUCCESS = 0
 VIOLATIONS_FOUND = 1
 ERROR = 2
-       
-def main():
+
+
+def main(argv=None):
+
+    parser = argparse.ArgumentParser(prog="scrut")
+    parser.add_argument("--json", action="store_true", help="print findings as JSON")
+    args = parser.parse_args(argv)
 
     config = load_config()
     rules = config.get("rules", DEFAULT_RULES)
@@ -35,7 +42,10 @@ def main():
         file_reports.extend(files)
         class_reports.extend(classes)
 
-    generate_report(functions_reports, file_reports, class_reports)
+    if args.json:
+        render_json(functions_reports, file_reports, class_reports)
+    else:
+        generate_report(functions_reports, file_reports, class_reports)
 
     reports = class_reports + functions_reports + file_reports
 

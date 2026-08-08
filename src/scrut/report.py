@@ -3,6 +3,7 @@ import re
 import shutil
 import sys
 import unicodedata
+import json
 
 _USE_COLOR = sys.stdout.isatty()
 
@@ -51,6 +52,48 @@ def _set_font():
 
 def generate_report(function_reports, file_reports, class_reports):
     render_report(function_reports, file_reports, class_reports)
+
+
+def render_json(function_reports, file_reports, class_reports):
+
+    violations = []
+
+    for report in class_reports + function_reports + file_reports:
+
+        if "file" in report:
+            file_name = report["file"]
+            item_name = report["name"]
+
+            if "parameters" in report:
+                kind = "func"
+            else:
+                kind = "class"
+
+        else:
+            file_name = report["name"]
+            item_name = "file"
+            kind = "file"
+
+        for issue in report["issues"]:
+            violations.append(
+                {
+                    "rule": issue.get("rule") or _rule_label(issue["message"]),
+                    "severity": issue["severity"],
+                    "message": issue["message"],
+                    "file": file_name,
+                    "name": item_name,
+                    "kind": kind,
+                }
+            )
+
+    summary = {
+        "total": len(violations),
+        "errors": sum(1 for v in violations if v["severity"] == "ERROR"),
+        "warnings": sum(1 for v in violations if v["severity"] != "ERROR"),
+        "files_with_violations": len({v["file"] for v in violations}),
+    }
+
+    print(json.dumps({"version": 1, "violations": violations, "summary": summary}))
 
 
 def render_report(function_reports, file_reports, class_reports):

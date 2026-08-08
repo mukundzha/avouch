@@ -17,7 +17,7 @@ def analyze(function_node, limits):
         branches.append(node.body)
 
         # Add elif branches
-        current = node.orelse
+        current = node.orelse 
 
         while (
             len(current) == 1
