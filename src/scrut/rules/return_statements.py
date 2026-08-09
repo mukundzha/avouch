@@ -14,7 +14,7 @@ def analyze(function_node, limits):
 
 
     if return_count > limit:
-        issues.append(
+        issues.append( 
             {
                 "rule": "SCR016",
                 "severity": "WARNING",

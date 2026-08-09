@@ -32,14 +32,12 @@ The format is inspired by Keep a Changelog.
 ### Changed
 - Modularized inline analysis logic into a dedicated rule module per
   rule, each behind an `analyze(node, limits)` signature.
-- Redesigned report rendering:
-  - summary header with per-severity counts and a passing-files count
-  - table per file with Component / Kind / Rule / Metric columns
-  - width-aware layout that truncates long values and never wraps
-  - collapsed `[PASSING]` grid that adapts to the terminal width
-  - redundant "detected" wording removed from rule labels (kept in the
-    Metric column)
-  - alignment fixed for emoji and wide glyphs
+- Redesigned report rendering with a minimal Rich-based terminal UI:
+  - bold project header with file / issue / finding counts
+  - per-file breakdown with bold function names and dim rule identifiers
+  - grouped findings per function with whitespace-driven indentation
+  - width-aware message truncation that never wraps
+  - rule-aligned summary section ordered by frequency with passing-file count
 - Improved rule messages with concrete remediation guidance.
 
 ### Fixed
