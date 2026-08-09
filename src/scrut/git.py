@@ -1,5 +1,6 @@
 import subprocess
 from scrut.utility.is_generated import is_generated
+from scrut.utility.is_ignored import is_ignored
 from pathlib import Path
 
 def is_gitrepo():
@@ -25,14 +26,19 @@ def get_changed_files():
     return changed
 
 
-def get_reviewable_files(files):
-    
+def get_reviewable_files(files, ignore_paths=()):
+
     reviewable = []
 
     for file in files:
         path = Path(file)
 
-        if path.suffix == ".py"  and not is_generated(path) and path.exists():
+        if (
+            path.suffix == ".py"
+            and not is_generated(path)
+            and not is_ignored(file, ignore_paths)
+            and path.exists()
+        ):
             reviewable.append(str(path))
 
     return reviewable

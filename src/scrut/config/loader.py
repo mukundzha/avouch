@@ -25,23 +25,26 @@ DEFAULT_RULES = {
     "async_without_await": True,
 }
 
+DEFAULT_IGNORE_PATHS = []
+
 
 def load_config():
 
     config_path = Path(CONFIG_FILE)
 
     if not config_path.exists():
-        return {"limits": DEFAULT_LIMITS, "rules": DEFAULT_RULES}
+        return {"limits": DEFAULT_LIMITS, "rules": DEFAULT_RULES, "ignore_paths": DEFAULT_IGNORE_PATHS}
 
     with open(config_path, "rb") as file:
         config = tomllib.load(file)
 
     user_limits = config.get("limits", {})
     user_rules = config.get("rules", {})
+    user_ignore_paths = config.get("ignore_paths", [])
 
     merged_limits = merge_limits(user_limits)
 
-    return {"limits": merged_limits , "rules": merge_rules(user_rules) }
+    return {"limits": merged_limits, "rules": merge_rules(user_rules), "ignore_paths": merge_ignore_paths(user_ignore_paths)}
 
 
 def merge_limits(user_limits):
@@ -59,4 +62,15 @@ def merge_rules(user_rules):
     merged_rules.update(user_rules)
 
     return merged_rules
+
+def merge_ignore_paths(user_ignore_paths):
+
+    if not isinstance(user_ignore_paths, list):
+        raise ValueError("ignore_paths in scrut.toml must be a list of paths")
+
+    merged = DEFAULT_IGNORE_PATHS.copy()
+
+    merged.extend(user_ignore_paths)
+
+    return merged
 

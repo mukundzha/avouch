@@ -15,18 +15,26 @@ def main(argv=None):
 
     parser = argparse.ArgumentParser(prog="scrut")
     parser.add_argument("--json", action="store_true", help="print findings as JSON")
+    parser.add_argument(
+        "--ignore-path",
+        action="append",
+        metavar="PATH",
+        help="exclude a repository-relative file or directory from the review; can be repeated",
+    )
     args = parser.parse_args(argv)
 
     config = load_config()
     rules = config.get("rules", DEFAULT_RULES)
     limits = config.get("limits", DEFAULT_LIMITS)
+    ignore_paths = config.get("ignore_paths", []) + (args.ignore_path or [])
+    ignore_paths = list(dict.fromkeys(ignore_paths))
 
     if not is_gitrepo():
         print("Not inside a Git repository.")
         return ERROR
 
     changed_files = get_changed_files()
-    reviewable_files = get_reviewable_files(changed_files)
+    reviewable_files = get_reviewable_files(changed_files, ignore_paths)
 
     if not reviewable_files:
         print("No Python files to review.")
@@ -57,4 +65,3 @@ def main(argv=None):
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

@@ -3,14 +3,17 @@ import json
 import subprocess
 from unittest.mock import Mock, patch
 
+import pytest
+
 from scrut.analyzer import analyze_file, get_depth, read_file
 from scrut.git import get_changed_files, get_reviewable_files, is_gitrepo
 from scrut.report import generate_report
 from scrut.cli import main, SUCCESS, VIOLATIONS_FOUND, ERROR
 from scrut.config.default import DEFAULT_LIMITS
-from scrut.config.loader import load_config, merge_limits, DEFAULT_RULES
+from scrut.config.loader import load_config, merge_limits, DEFAULT_RULES, merge_ignore_paths
 from scrut.rules.complexity import calculate_complexity
 from scrut.rules.boolean_complexity import analyze, count_boolean_conditions
+from scrut.utility.is_ignored import is_ignored
 
 
 @patch("scrut.git.subprocess.run")
@@ -55,6 +58,153 @@ def test_get_reviewable_files(tmp_path):
         str(py1),
         str(py2),
     ]
+
+
+def test_get_reviewable_files_ignores_directory(tmp_path, monkeypatch):
+
+    monkeypatch.chdir(tmp_path)
+
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "src").mkdir()
+    (tmp_path / "tests" / "test_app.py").write_text("")
+    (tmp_path / "src" / "app.py").write_text("")
+
+    assert get_reviewable_files(
+        ["tests/test_app.py", "src/app.py"], ["tests"]
+    ) == ["src/app.py"]
+
+
+def test_get_reviewable_files_ignores_single_file(tmp_path, monkeypatch):
+
+    monkeypatch.chdir(tmp_path)
+
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "app.py").write_text("")
+    (tmp_path / "src" / "legacy.py").write_text("")
+
+    assert get_reviewable_files(
+        ["src/app.py", "src/legacy.py"], ["src/legacy.py"]
+    ) == ["src/app.py"]
+
+
+def test_get_reviewable_files_ignores_multiple_paths(tmp_path, monkeypatch):
+
+    monkeypatch.chdir(tmp_path)
+
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "examples").mkdir()
+    (tmp_path / "tests" / "test_app.py").write_text("")
+    (tmp_path / "examples" / "demo.py").write_text("")
+    (tmp_path / "app.py").write_text("")
+
+    assert get_reviewable_files(
+        ["tests/test_app.py", "examples/demo.py", "app.py"],
+        ["tests", "examples"],
+    ) == ["app.py"]
+
+
+def test_get_reviewable_files_ignore_path_is_not_substring(tmp_path, monkeypatch):
+
+    monkeypatch.chdir(tmp_path)
+
+    (tmp_path / "mytests").mkdir()
+    (tmp_path / "src" / "tests").mkdir(parents=True)
+    (tmp_path / "tests.py").write_text("")
+    (tmp_path / "contest.py").write_text("")
+    (tmp_path / "mytests" / "unit.py").write_text("")
+    (tmp_path / "src" / "tests.py").write_text("")
+    (tmp_path / "src" / "tests" / "x.py").write_text("")
+
+    candidates = [
+        "tests.py",
+        "contest.py",
+        "mytests/unit.py",
+        "src/tests.py",
+        "src/tests/x.py",
+    ]
+
+    assert get_reviewable_files(candidates, ["tests"]) == candidates
+
+
+def test_get_reviewable_files_ignores_nested_paths(tmp_path, monkeypatch):
+
+    monkeypatch.chdir(tmp_path)
+
+    (tmp_path / "tests" / "unit").mkdir(parents=True)
+    (tmp_path / "tests" / "unit" / "test_app.py").write_text("")
+    (tmp_path / "app.py").write_text("")
+
+    assert get_reviewable_files(
+        ["tests/unit/test_app.py", "app.py"], ["tests"]
+    ) == ["app.py"]
+
+
+def test_get_reviewable_files_generated_and_ignored(tmp_path, monkeypatch):
+
+    monkeypatch.chdir(tmp_path)
+
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "src").mkdir()
+    (tmp_path / "generated.py").write_text("")
+    (tmp_path / "src" / "app.py").write_text("")
+    (tmp_path / "tests" / "generated_fixture.py").write_text("")
+    (tmp_path / "tests" / "fixture.py").write_text("")
+
+    assert get_reviewable_files(
+        [
+            "generated.py",
+            "src/app.py",
+            "tests/generated_fixture.py",
+            "tests/fixture.py",
+        ],
+        ["tests"],
+    ) == ["src/app.py"]
+
+
+def test_get_reviewable_files_default_unchanged(tmp_path, monkeypatch):
+
+    monkeypatch.chdir(tmp_path)
+
+    (tmp_path / "a.py").write_text("")
+    (tmp_path / "b.txt").write_text("")
+
+    candidates = ["a.py", "b.txt", "missing.py"]
+
+    assert get_reviewable_files(candidates) == get_reviewable_files(
+        candidates, []
+    ) == ["a.py"]
+
+
+def test_is_ignored_path_components():
+
+    cases = [
+        ("tests/test_app.py", ["tests"], True),
+        ("tests/unit/test_app.py", ["tests"], True),
+        ("tests", ["tests"], True),
+        ("tests.py", ["tests"], False),
+        ("contest.py", ["tests"], False),
+        ("src/tests/x.py", ["tests"], False),
+        ("src/tests.py", ["src/tests"], False),
+        ("src/tests/x.py", ["src/tests"], True),
+        ("src/tests.py", ["src"], True),
+        ("src/app.py", ["src/legacy"], False),
+        ("src/app.py", ["src/legacy.py"], False),
+        ("migrations/001_init.py", ["migrations"], True),
+        ("src/app.py", ["src/app.py"], True),
+        ("src/app.py", ["./src/app.py"], True),
+        ("src/app.py", ["src/app.py/"], True),
+        ("tests/x.py", ["tests/"], True),
+        ("tests/x.py", ["tests", "tests"], True),
+    ]
+
+    for path, ignore_paths, expected in cases:
+        assert is_ignored(path, ignore_paths) is expected, (path, ignore_paths)
+
+
+def test_is_ignored_dot_ignores_everything():
+
+    assert is_ignored("src/app.py", ["."]) is True
+    assert is_ignored("src/app.py", [""]) is True
 
 
 def test_read_file(tmp_path):
@@ -409,6 +559,38 @@ def test_merge_limits():
     assert merged["max_file_lines"] == 400
 
 
+def test_load_config_ignore_paths(tmp_path, monkeypatch):
+
+    (tmp_path / "scrut.toml").write_text(
+        "ignore_paths = ['tests', 'migrations']\n"
+    )
+    monkeypatch.chdir(tmp_path)
+
+    assert load_config()["ignore_paths"] == ["tests", "migrations"]
+
+
+def test_load_config_ignore_paths_default_empty(tmp_path, monkeypatch):
+
+    monkeypatch.chdir(tmp_path)
+
+    assert load_config()["ignore_paths"] == []
+
+
+def test_load_config_ignore_paths_must_be_list(tmp_path, monkeypatch):
+
+    (tmp_path / "scrut.toml").write_text("ignore_paths = 'tests'\n")
+    monkeypatch.chdir(tmp_path)
+
+    with pytest.raises(ValueError):
+        load_config()
+
+
+def test_merge_ignore_paths():
+
+    assert merge_ignore_paths(["tests"]) == ["tests"]
+    assert merge_ignore_paths([]) == []
+
+
 def test_generate_report_all_clean(capsys):
 
     funcs = [
@@ -501,6 +683,37 @@ def test_main_with_real_git_repo(tmp_path, monkeypatch, capsys):
 
     assert "All clean." in capsys.readouterr().out
     assert result == SUCCESS
+
+
+def test_main_ignores_path_in_real_git_repo(tmp_path, monkeypatch, capsys):
+
+    def git(*args):
+        subprocess.run(["git", *args], cwd=tmp_path, check=True, capture_output=True)
+
+    git("init", "-q")
+    git("config", "user.email", "test@example.com")
+    git("config", "user.name", "Test")
+
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "app.py").write_text("def a():\n    pass\n")
+    (tmp_path / "tests" / "bad.py").write_text("def t():\n    pass\n")
+    git("add", "-A")
+    git("-c", "commit.gpgsign=false", "commit", "-q", "-m", "initial")
+
+    body = "".join(f"    if x{i}:\n        pass\n" for i in range(10))
+    (tmp_path / "app.py").write_text("def f(x):\n" + body)
+    (tmp_path / "tests" / "bad.py").write_text("def t(x):\n" + body)
+    git("add", "-A")
+
+    monkeypatch.chdir(tmp_path)
+
+    result = main(["--ignore-path", "tests"])
+
+    out = capsys.readouterr().out
+
+    assert result == VIOLATIONS_FOUND
+    assert "app.py" in out
+    assert "tests/bad.py" not in out
 
 
 def test_main_returns_1_on_violations(tmp_path, monkeypatch, capsys):
