@@ -104,41 +104,49 @@ never appear in the output.
 ```text
 $ scrut
 
-scrut [Review Summary]
-╔═════════════════════════════════════════╗
-║ 🟡 3 warnings      │ 📊 3 funcs checked ║
-╚═════════════════════════════════════════╝
+Scrut
 
-[NEEDS REVIEW] ────────────────────────────────────────────────────────────
+3 files  2 with issues  5 findings
 
-╭─ ⚠️ buggy.py (3)
-│  Component  Kind  Rule                                         Metric
-│  ────────────────────────────────────────────────────────────────────
-│  handle     func  Nesting too deep                                5/4
-│  fake       func  Async function contains no await expression  detected
-│  extra      func  Too many parameters                             6/5
+src/app.py
+
+  handle
+    SCR013  Nesting too deep
+  fake
+    SCR001  Async function
+  extra
+    SCR014  Too many parameters
+
+tests/bad.py
+
+  messy
+    SCR015  Nested function
+    SCR014  Too many parameters
+
+Summary
+SCR014  Too many parameters  2
+SCR013  Nesting too deep     1
+SCR001  Async function       1
+SCR015  Nested function      1
+
+1 file passed
 ```
 
-- **Summary box** — counts of errors, warnings, passed files, and
-  functions checked.
-- **`[NEEDS REVIEW]`** — one block per file with findings. `⚠️` for
-  warnings-only files, `🛑` for files with errors.
-- **Table columns** — `Component` (function, class, or `<file>`), `Kind`,
-  `Rule` (human-readable label), `Metric` (measured/limit, or `detected`
-  for rules without a threshold).
-- **`[PASSING]`** — files with no findings, as a multi-column grid that
-  adapts to terminal width and never exceeds four lines. Excess entries
-  collapse to `[+N more]`.
+- **Header** — file/issue/finding counts.
+- **Per-file sections** — bold filenames, indented function names, dim rule
+  identifiers with short messages. Consecutive findings on the same function
+  are grouped.
+- **Summary** — findings grouped by rule id, ordered by frequency, with a
+  passing-file count.
 
 ### A clean run
 
 ```text
 $ scrut
 
-scrut [Review Summary]
-╔═══════════════════╗
-║ 🟢 All clean. ║
-╚═══════════════════╝
+Scrut
+
+✓ All clean.
 ```
 
 ### Edge cases
@@ -599,18 +607,18 @@ flowchart LR
      `AsyncFunctionDef`, and `ClassDef` nodes to their rules (rule
      toggles are checked before dispatch, so disabled rules never run),
    - returns `(function_reports, file_reports, class_reports)`.
-5. `report.render_report(...)` groups issues by file in a single pass,
-   counts severities, and renders the summary box, `[NEEDS REVIEW]`
-   tables, and `[PASSING]` grid.
+5. `report.render_report(...)` groups issues by file in a single pass
+    and renders the bold header, per-file breakdown, and rule-aligned
+    summary.
 
 ### Reporting details
 
-Table rendering is width-aware: column widths come from displayed
-character width (emoji/wide glyphs count double), long values truncate
-with `…` so tables never wrap, and the Metric column is dropped entirely
-when no row carries a metric. Identical `(component, rule, metric)` rows
-are deduplicated; file-level rows sort first. `SCRUT_FONT=name` is an
-opt-in OSC 50 font switch honored only by capable terminals.
+Terminal rendering uses a minimal Rich-based UI (`Console`, `Text`, `Group`,
+`Padding` only) — no borders, no emojis, no tables. Column widths are not
+computed in the terminal; instead, long messages truncate with `…` so output
+never wraps. Identical `(component, rule)` rows are deduplicated per file, and
+file-level rows sort first. `SCRUT_FONT=name` is an opt-in OSC 50 font switch
+honored only by capable terminals.
 
 ---
 
