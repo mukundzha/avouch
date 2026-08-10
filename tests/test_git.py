@@ -763,6 +763,81 @@ def test_main_docs_works_outside_git_repo(mock_is_gitrepo, capsys):
     assert not mock_is_gitrepo.called
 
 
+def _main_git(tmp_path, monkeypatch, stdout):
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        "scrut.git.subprocess.run",
+        Mock(
+            side_effect=[
+                Mock(returncode=0, stdout=""),
+                Mock(returncode=0, stdout=""),
+                Mock(returncode=0, stdout=stdout),
+            ]
+        ),
+    )
+
+
+def test_main_verbose_reports_diagnostics(tmp_path, monkeypatch, capsys):
+
+    (tmp_path / "a.py").write_text("def ok():\n    pass\n")
+
+    _main_git(tmp_path, monkeypatch, "a.py\n")
+
+    assert main(["--verbose"]) == SUCCESS
+
+    captured = capsys.readouterr()
+
+    assert "reviewing 1 of 1" in captured.err
+    assert "analyzed a.py" in captured.err
+    assert "findings: 0" in captured.err
+    assert "All clean." in captured.out
+
+
+def test_main_verbose_keeps_normal_mode_quiet(tmp_path, monkeypatch, capsys):
+
+    (tmp_path / "a.py").write_text("def ok():\n    pass\n")
+
+    _main_git(tmp_path, monkeypatch, "a.py\n")
+
+    assert main([]) == SUCCESS
+
+    captured = capsys.readouterr()
+
+    assert "All clean." in captured.out
+    assert captured.err == ""
+
+
+def test_main_verbose_findings_unchanged(tmp_path, monkeypatch, capsys):
+
+    body = "".join(f"    if x{i}:\n        pass\n" for i in range(10))
+    (tmp_path / "bad.py").write_text("def f(x):\n" + body)
+
+    monkeypatch.chdir(tmp_path)
+
+    def run(mode):
+
+        order = {"call": 0}
+
+        def fake_run(*args, **kwargs):
+            order["call"] += 1
+            return Mock(returncode=0, stdout="bad.py\n" if order["call"] == 3 else "")
+
+        monkeypatch.setattr("scrut.git.subprocess.run", fake_run)
+
+        return main(mode)
+
+    assert run([]) == VIOLATIONS_FOUND
+    normal_out = capsys.readouterr().out
+
+    assert run(["--verbose"]) == VIOLATIONS_FOUND
+    verbose = capsys.readouterr()
+
+    assert verbose.out == normal_out
+    assert "Function too complex" in verbose.out
+    assert "findings: 1" in verbose.err
+
+
 def _main_json(tmp_path, monkeypatch, stdout):
 
     monkeypatch.chdir(tmp_path)

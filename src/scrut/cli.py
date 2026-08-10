@@ -1,9 +1,10 @@
 import argparse
+from pathlib import Path
 
 from scrut.config.loader import DEFAULT_RULES, load_config
 from scrut.config.default import DEFAULT_LIMITS
 from scrut.analyzer import analyze_file
-from scrut.report import generate_report, render_json
+from scrut.report import generate_report, render_json, vlog
 from scrut.utility.docs import DOCS
 from scrut.git import is_gitrepo, get_changed_files, get_reviewable_files
 
@@ -23,6 +24,11 @@ def main(argv=None):
         metavar="PATH",
         help="exclude a repository-relative file or directory from the review; can be repeated",
     )
+    parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="print step-by-step review details to stderr",
+    )
     args = parser.parse_args(argv)
 
     if args.docs:
@@ -35,12 +41,36 @@ def main(argv=None):
     ignore_paths = config.get("ignore_paths", []) + (args.ignore_path or [])
     ignore_paths = list(dict.fromkeys(ignore_paths))
 
+    vlog(
+        args.verbose,
+        f"config: {'scrut.toml' if Path('scrut.toml').exists() else 'defaults (no scrut.toml)'}, "
+        f"{len(ignore_paths)} ignore path(s)",
+    )
+    vlog(
+        args.verbose,
+        "review mode: changed files vs HEAD (git diff HEAD --name-only) + untracked files",
+    )
+
     if not is_gitrepo():
         print("Not inside a Git repository.")
         return ERROR
 
     changed_files = get_changed_files()
     reviewable_files = get_reviewable_files(changed_files, ignore_paths)
+
+    vlog(
+        args.verbose,
+        f"reviewing {len(reviewable_files)} of {len(changed_files)} "
+        f"changed file{'s' if len(reviewable_files) != 1 else ''}",
+    )
+
+    if args.verbose:
+        names = ", ".join(reviewable_files[:10])
+
+        if len(reviewable_files) > 10:
+            names += ", ..."
+
+        vlog(True, f"review set: {names}")
 
     if not reviewable_files:
         print("No Python files to review.")
@@ -51,7 +81,13 @@ def main(argv=None):
     class_reports = []
 
     for file_path in reviewable_files:
+        vlog(args.verbose, f"analyzing {file_path}")
         functions, files, classes = analyze_file(file_path, limits, rules)
+        vlog(
+            args.verbose,
+            f"analyzed {file_path}: {len(functions)} functions, "
+            f"{len(classes)} classes, {files[0]['lines']} lines",
+        )
         functions_reports.extend(functions)
         file_reports.extend(files)
         class_reports.extend(classes)
@@ -63,10 +99,30 @@ def main(argv=None):
 
     reports = class_reports + functions_reports + file_reports
 
-    if any(report["issues"] for report in reports):
-        return VIOLATIONS_FOUND
+    if args.verbose:
+        findings = [issue for report in reports for issue in report["issues"]]
+        errors = sum(1 for issue in findings if issue["severity"] == "ERROR")
+        warnings = len(findings) - errors
+        files_with_findings = len(
+            {
+                report["file"] if "file" in report else report["name"]
+                for report in reports
+                if report["issues"]
+            }
+        )
 
-    return SUCCESS
+        vlog(
+            True,
+            f"findings: {len(findings)} ({warnings} warning{'s' if warnings != 1 else ''}, "
+            f"{errors} error{'s' if errors != 1 else ''}) in "
+            f"{files_with_findings} file{'s' if files_with_findings != 1 else ''}",
+        )
+
+    exit_code = VIOLATIONS_FOUND if any(report["issues"] for report in reports) else SUCCESS
+
+    vlog(args.verbose, f"exit code: {exit_code}")
+
+    return exit_code
 
 
 if __name__ == "__main__":

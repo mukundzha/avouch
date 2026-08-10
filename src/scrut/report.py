@@ -54,6 +54,12 @@ def generate_report(function_reports, file_reports, class_reports):
     render_report(function_reports, file_reports, class_reports)
 
 
+def vlog(verbose, message):
+
+    if verbose:
+        print(f"scrut: {message}", file=sys.stderr)
+
+
 def render_json(function_reports, file_reports, class_reports):
 
     violations = []

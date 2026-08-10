@@ -90,6 +90,7 @@ cd your-repo
 scrut            # human report
 scrut --json     # one JSON document on stdout
 scrut --docs     # built-in documentation; no review performed
+scrut --verbose  # step-by-step review details on stderr
 scrut --help     # every flag
 ```
 
