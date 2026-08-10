@@ -739,6 +739,30 @@ def test_main_returns_2_on_error(mock_is_gitrepo, capsys):
     assert "Not inside a Git repository." in capsys.readouterr().out
 
 
+@patch("scrut.cli.is_gitrepo")
+def test_main_docs_prints_without_review(mock_is_gitrepo, capsys):
+
+    assert main(["--docs"]) == SUCCESS
+
+    out = capsys.readouterr().out
+
+    assert "SCRUT" in out
+    assert "REVIEW RULES" in out
+    assert "SCR014" in out
+    assert not mock_is_gitrepo.called
+
+
+@patch("scrut.cli.is_gitrepo", return_value=False)
+def test_main_docs_works_outside_git_repo(mock_is_gitrepo, capsys):
+
+    assert main(["--docs"]) == SUCCESS
+
+    out = capsys.readouterr().out
+
+    assert "SCRUT" in out
+    assert not mock_is_gitrepo.called
+
+
 def _main_json(tmp_path, monkeypatch, stdout):
 
     monkeypatch.chdir(tmp_path)

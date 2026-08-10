@@ -4,6 +4,7 @@ from scrut.config.loader import DEFAULT_RULES, load_config
 from scrut.config.default import DEFAULT_LIMITS
 from scrut.analyzer import analyze_file
 from scrut.report import generate_report, render_json
+from scrut.docs import DOCS
 from scrut.git import is_gitrepo, get_changed_files, get_reviewable_files
 
 SUCCESS = 0
@@ -14,6 +15,7 @@ ERROR = 2
 def main(argv=None):
 
     parser = argparse.ArgumentParser(prog="scrut")
+    parser.add_argument("--docs", action="store_true", help="show built-in documentation and exit")
     parser.add_argument("--json", action="store_true", help="print findings as JSON")
     parser.add_argument(
         "--ignore-path",
@@ -22,6 +24,10 @@ def main(argv=None):
         help="exclude a repository-relative file or directory from the review; can be repeated",
     )
     args = parser.parse_args(argv)
+
+    if args.docs:
+        print(DOCS)
+        return SUCCESS
 
     config = load_config()
     rules = config.get("rules", DEFAULT_RULES)
