@@ -82,12 +82,15 @@ Both register the `scrut` console script (`scrut.cli:main`).
 
 ## Quick start
 
-The entire interface is one command with a single optional flag:
+The interface is one command with a small set of optional flags:
 
 ```bash
 cd your-repo
 # ... make a change ...
-scrut
+scrut            # human report
+scrut --json     # one JSON document on stdout
+scrut --docs     # built-in documentation; no review performed
+scrut --help     # every flag
 ```
 
 The review set is defined by Git, so there is nothing to configure at
@@ -97,56 +100,56 @@ invocation time. Scrut reviews:
 - untracked `.py` files (`git ls-files --others --exclude-standard`).
 
 Deleted paths and non-`.py` files are skipped. Committed, untouched files
-never appear in the output.
+never appear in the output. Files that look generated
+(`generated.py`, `*_generated.py`, `codegen.py`, `autogen.py`, … — see
+`src/scrut/utility/is_generated.py`) are skipped too.
 
 ### A run with findings
 
 ```text
 $ scrut
 
-Scrut
+scrut [Review Summary]
+╔═════════════════════════════════════════╗
+║ 🟡 2 warnings      │ 📊 2 funcs checked ║
+╚═════════════════════════════════════════╝
 
-3 files  2 with issues  5 findings
+[NEEDS REVIEW] ────────────────────────────────────────────────────────────
 
-src/app.py
+╭─ ⚠️ tests/bad.py (2)
+│  Component  Kind  Rule                 Metric
+│  ────────────────────────────────────────────
+│  messy      func  Too many parameters     6/5
 
-  handle
-    SCR013  Nesting too deep
-  fake
-    SCR001  Async function
-  extra
-    SCR014  Too many parameters
+[PASSING] ─────────────────────────────────────────────────────────────────
 
-tests/bad.py
-
-  messy
-    SCR015  Nested function
-    SCR014  Too many parameters
-
-Summary
-SCR014  Too many parameters  2
-SCR013  Nesting too deep     1
-SCR001  Async function       1
-SCR015  Nested function      1
-
-1 file passed
+✓ src/util.py
 ```
 
-- **Header** — file/issue/finding counts.
-- **Per-file sections** — bold filenames, indented function names, dim rule
-  identifiers with short messages. Consecutive findings on the same function
-  are grouped.
-- **Summary** — findings grouped by rule id, ordered by frequency, with a
-  passing-file count.
+- **Summary box** — bold `scrut [Review Summary]` with per-severity
+  counts. Segments appear only when non-zero: 🔴 errors, 🟡 warnings,
+  🟢 passed files, 📊 functions checked.
+- **Per-file sections** — each file under `[NEEDS REVIEW]` is headed by
+  its name and finding count, flagged 🛑 when it contains an `ERROR`
+  and ⚠️ otherwise.
+- **Rows** — a `Component / Kind / Rule / Metric` table per file.
+  Components are functions, classes, or `<file>`; kinds are `func`,
+  `class`, `file`. Threshold rules render `measured/limit` (e.g. `6/5`);
+  presence rules render `detected`. Identical `(component, rule)` rows
+  are deduplicated per file — two findings on the same component and
+  rule render once, as above.
+- **Passing grid** — compliant files under `[PASSING]`, compressed to a
+  few lines with a `[+N more]` note when there are many.
 
 ### A clean run
 
 ```text
 $ scrut
 
-Scrut
-
-✓ All clean.
+scrut [Review Summary]
+╔═══════════════╗
+║ 🟢 All clean. ║
+╚═══════════════╝
 ```
 
 ### Edge cases
@@ -165,6 +168,14 @@ Colors are ANSI codes emitted only when stdout is a TTY. Piped output is
 plain, so `scrut | tee review.log` and CI capture work cleanly. The exit
 code is `0` when the review is clean, `1` when findings are reported, and
 `2` when Scrut cannot run.
+
+### Built-in documentation
+
+`scrut --docs` prints terminal documentation derived from this codebase —
+what Scrut does, the Git-aware workflow, every rule with its scope, every
+configuration key with its default, both output formats, and realistic
+examples — then exits `0` without running a review. It works anywhere,
+even outside a Git repository.
 
 ---
 
@@ -217,8 +228,9 @@ built-in defaults — any subset is valid. A malformed file raises instead
 of being silently ignored.
 
 ```toml
-[limits]   # numeric thresholds per rule
-[rules]    # on/off toggle per rule
+[limits]        # numeric thresholds per rule
+[rules]         # on/off toggle per rule
+ignore_paths = ["tests", "migrations"]   # top-level: paths to skip
 ```
 
 ### Rule toggles
@@ -257,7 +269,7 @@ Setting a toggle to `false` disables that rule's findings. A one-line
 | `max_file_lines` | 400 | SCR011 | Max file line count |
 | `max_complexity` | 10 | — | Max cyclomatic complexity |
 | `max_boolean_conditions` | 5 | SCR003 | Max operands in one chain |
-| `max_if_else_chain` | 5 | SCR007 | Max if/elif links |
+| `max_if_else_chain` | 5 | — | stored key, not read (see below) |
 | `max_local_variables` | 15 | SCR009 | Max distinct assigned names |
 | `max_return_statements` | 3 | SCR016 | Max `return`s per function |
 | `max_lambda_nodes` | 5 | SCR008 | Max AST nodes in a lambda body |
@@ -266,6 +278,27 @@ Setting a toggle to `false` disables that rule's findings. A one-line
 Limits are applied by key. A rule whose limit key is absent from the
 merged config falls back to the limit hardcoded in its own module, so a
 partial `[limits]` never turns a rule off.
+
+Two of the stored keys are never read by a rule: SCR007 actually reads
+`max_if_chain` (default 5) and SCR005 reads `max_large_comprehensions`
+(default 10), while `max_if_else_chain` and `max_comprehension_length`
+in `DEFAULT_LIMITS` do not affect analysis. Tune the chain rule with
+`max_if_chain = N` and the comprehension rule with
+`max_large_comprehensions = N`.
+
+### Ignoring paths
+
+Two mechanisms exclude files, both matching repository-relative paths
+component-wise — `tests` skips `tests/` and `tests/x.py` but not
+`tests.py`; a bare `"."` skips the whole repository:
+
+- `scrut --ignore-path PATH` — repeatable CLI flag, or
+- `ignore_paths = ["tests", "migrations"]` at the top level of
+  `scrut.toml` (must be a list; anything else raises).
+
+CLI and TOML paths are combined and de-duplicated before analysis.
+Matching is purely string-based (`src/scrut/utility/is_ignored.py`) —
+no filesystem access.
 
 ### Example
 
@@ -461,7 +494,10 @@ def transform(v):
 
 Flags functions assigning more than `max_local_variables` (default 15)
 distinct names — every new name is cognitive load and a chance for
-shadowing. Fix: extract groups of assignments into helpers.
+shadowing. The count covers plain `x = ...` assignment targets only
+(`ast.Assign` with `ast.Name` targets); augmented and unpacked
+assignments are not counted. Fix: extract groups of assignments into
+helpers.
 
 ### SCR010 — Class too large
 
@@ -513,9 +549,8 @@ with open(path) as f:
 ### SCR014 — Too many parameters
 
 Flags functions with more than `max_parameters` (default 5) positional or
-keyword parameters. `*args`, `**kwargs`, `self`, and keyword-only
-parameters are excluded — the rule measures what makes calls hard to
-read.
+keyword parameters. The count is `node.args.args`, so `*args` and
+`**kwargs` are excluded; `self` on methods counts as a parameter.
 
 ```python
 # bad
@@ -571,7 +606,7 @@ a class's complexity is the sum over its entire body, methods included.
 
 ## How it works
 
-The codebase is deliberately small: a CLI orchestrator, three pipeline
+The codebase is deliberately small: a CLI orchestrator, four pipeline
 modules, two config modules, and one rule per file. The governing rule is
 that **`cli.py` only orchestrates** — every function it calls lives in
 another module, and nothing imports `cli.py`.
@@ -586,10 +621,11 @@ flowchart LR
 | Module | Role | Key exports |
 |--------|------|-------------|
 | `cli.py` | Pipeline wiring | `main()` |
+| `docs.py` (in `utility/`) | Built-in `--docs` text | `DOCS` |
 | `git.py` | Git interaction | `is_gitrepo`, `get_changed_files`, `get_reviewable_files` |
 | `analyzer.py` | AST analysis | `read_file`, `analyze_file` |
 | `rules/*.py` | One rule per module | `analyze(node, limits)` |
-| `report.py` | Terminal rendering | `render_report`, `generate_report` |
+| `report.py` | Terminal + JSON rendering | `render_report`, `generate_report`, `render_json` |
 | `config/default.py` | Default limits | `DEFAULT_LIMITS` |
 | `config/loader.py` | TOML load + merge | `load_config`, `merge_limits`, `merge_rules`, `DEFAULT_RULES` |
 
@@ -599,7 +635,9 @@ flowchart LR
 2. `git.is_gitrepo()` — `git rev-parse --is-inside-work-tree`; exits the
    run with a message if not a repo.
 3. `git.get_changed_files()` — `git diff HEAD --name-only` plus untracked
-   files; `get_reviewable_files()` keeps existing `.py` paths.
+   files; `get_reviewable_files()` keeps existing `.py` paths that are
+   neither generated (`is_generated`) nor covered by ignore paths
+   (`is_ignored`); if none remain, prints a message and exits `2`.
 4. Per file, `analyzer.analyze_file(path, limits, rules)`:
    - reads UTF-8 (`OSError` → `ERROR` report), parses with `ast.parse`
      (`SyntaxError` → `ERROR` report; the rest of the run continues),
@@ -608,17 +646,23 @@ flowchart LR
      toggles are checked before dispatch, so disabled rules never run),
    - returns `(function_reports, file_reports, class_reports)`.
 5. `report.render_report(...)` groups issues by file in a single pass
-    and renders the bold header, per-file breakdown, and rule-aligned
-    summary.
+   and renders the `scrut [Review Summary]` box, `[NEEDS REVIEW]`
+   component tables, and the `[PASSING]` grid.
+
+`cli.py` with `--docs` short-circuits before config loading and prints
+`docs.DOCS`, so no Git or analysis code runs.
 
 ### Reporting details
 
-Terminal rendering uses a minimal Rich-based UI (`Console`, `Text`, `Group`,
-`Padding` only) — no borders, no emojis, no tables. Column widths are not
-computed in the terminal; instead, long messages truncate with `…` so output
-never wraps. Identical `(component, rule)` rows are deduplicated per file, and
-file-level rows sort first. `SCRUT_FONT=name` is an opt-in OSC 50 font switch
-honored only by capable terminals.
+Terminal rendering is hand-rolled ANSI in `src/scrut/report.py` — the
+`rich` dependency declared in `pyproject.toml` is not imported. Colors,
+box-drawing characters, and emoji are emitted only when stdout is a TTY;
+piped output is plain. Table columns are fitted to the terminal width
+and long rule names truncate with `…`, so lines never wrap. Identical
+`(component, rule)` rows are deduplicated per file, and file-level rows
+sort first. The `[PASSING]` grid collapses to at most a few lines, with
+a `[+N more]` note when it overflows. `SCRUT_FONT=name` is an opt-in
+OSC 50 font switch honored only by capable terminals.
 
 ---
 
@@ -637,11 +681,15 @@ scrut/
 │   │   ├── complexity.py           # cyclomatic metric (no issues itself)
 │   │   ├── max_nesting.py          # get_depth + BLOCK_NODES
 │   │   └── ...                     # one analyze(node, limits) per rule
+│   ├── utility/
+│   │   ├── docs.py         # --docs terminal documentation text
+│   │   ├── is_generated.py # generated-file patterns
+│   │   └── is_ignored.py   # ignore-path matching
 │   └── config/
 │       ├── default.py      # DEFAULT_LIMITS
 │       └── loader.py       # load_config, merge_limits, merge_rules
 └── tests/
-    └── test_git.py         # 36 tests, incl. a real-git end-to-end run
+    └── test_git.py         # 59 tests, incl. a real-git end-to-end run
 ```
 
 ---
@@ -666,7 +714,7 @@ violation, one for the boundary. The renderer displays any
 
 ## Testing
 
-All 36 tests run in a fraction of a second — no network, no package
+All 59 tests run in a fraction of a second — no network, no package
 installs:
 
 ```bash
@@ -677,9 +725,10 @@ python -m pytest tests/
 Coverage includes the git helpers, config merging, every nesting block
 type, every complexity decision point, boolean-chain measurement,
 rule boundaries, analysis failure paths (unreadable/syntax-error files),
-report output, and an end-to-end run against a **real temporary git
-repository** — Git itself is not mocked. Mocking is limited to
-`subprocess.run` where a real Git isn't needed.
+report output, the `--docs` flag (asserted to exit cleanly without
+touching Git, inside or outside a repository), and an end-to-end run
+against a **real temporary git repository** — Git itself is not mocked.
+Mocking is limited to `subprocess.run` where a real Git isn't needed.
 
 ---
 

@@ -4,7 +4,7 @@ from scrut.config.loader import DEFAULT_RULES, load_config
 from scrut.config.default import DEFAULT_LIMITS
 from scrut.analyzer import analyze_file
 from scrut.report import generate_report, render_json
-from scrut.docs import DOCS
+from scrut.utility.docs import DOCS
 from scrut.git import is_gitrepo, get_changed_files, get_reviewable_files
 
 SUCCESS = 0
