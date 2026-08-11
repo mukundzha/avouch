@@ -988,6 +988,146 @@ def test_main_staged_ignores_unstaged_changes(tmp_path, monkeypatch, capsys):
     assert "b.py" not in out
 
 
+def test_main_quiet_clean_suppresses_output(tmp_path, monkeypatch, capsys):
+
+    (tmp_path / "a.py").write_text("def ok():\n    pass\n")
+
+    _main_git(tmp_path, monkeypatch, "a.py\n")
+
+    assert main(["--quiet"]) == SUCCESS
+
+    assert capsys.readouterr().out == ""
+
+
+def test_main_quiet_same_exit_code_as_normal(tmp_path, monkeypatch, capsys):
+
+    body = "".join(f"    if x{i}:\n        pass\n" for i in range(10))
+    (tmp_path / "bad.py").write_text("def f(x):\n" + body)
+
+    monkeypatch.chdir(tmp_path)
+
+    def run(mode):
+
+        order = {"call": 0}
+
+        def fake_run(*args, **kwargs):
+            order["call"] += 1
+            return Mock(returncode=0, stdout="bad.py\n" if order["call"] == 3 else "")
+
+        monkeypatch.setattr("scrut.git.subprocess.run", fake_run)
+
+        return main(mode)
+
+    assert run([]) == VIOLATIONS_FOUND
+    assert "Function too complex" in capsys.readouterr().out
+
+    assert run(["--quiet"]) == VIOLATIONS_FOUND
+    assert capsys.readouterr().out == ""
+
+
+def test_main_quiet_errors_remain_visible(tmp_path, monkeypatch, capsys):
+
+    _main_git(tmp_path, monkeypatch, "")
+
+    assert main(["--quiet"]) == ERROR
+    assert "No Python files to review." in capsys.readouterr().out
+
+
+@patch("scrut.cli.is_gitrepo", return_value=False)
+def test_main_quiet_error_outside_git_repo(mock_is_gitrepo, capsys):
+
+    assert main(["--quiet"]) == ERROR
+    assert "Not inside a Git repository." in capsys.readouterr().out
+
+
+def test_main_quiet_json_still_valid(tmp_path, monkeypatch, capsys):
+
+    body = "".join(f"    if x{i}:\n        pass\n" for i in range(10))
+    (tmp_path / "bad.py").write_text("def f(x):\n" + body)
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        "scrut.git.subprocess.run",
+        Mock(
+            side_effect=[
+                Mock(returncode=0, stdout=""),
+                Mock(returncode=0, stdout="bad.py\n"),
+                Mock(returncode=0, stdout=""),
+            ]
+        ),
+    )
+
+    assert main(["--quiet", "--json"]) == VIOLATIONS_FOUND
+
+    data = json.loads(capsys.readouterr().out)
+
+    assert data["summary"]["total"] == 1
+
+
+def test_main_quiet_changed_suppresses_diff_view(tmp_path, monkeypatch, capsys):
+
+    (tmp_path / "bad.py").write_text("def f(x):\n    return x\n")
+
+    _main_git(tmp_path, monkeypatch, "bad.py\n")
+
+    assert main(["--quiet", "--changed"]) == SUCCESS
+
+    assert capsys.readouterr().out == ""
+
+
+def test_main_quiet_verbose_keeps_diagnostics(tmp_path, monkeypatch, capsys):
+
+    (tmp_path / "a.py").write_text("def ok():\n    pass\n")
+
+    _main_git(tmp_path, monkeypatch, "a.py\n")
+
+    assert main(["--quiet", "--verbose"]) == SUCCESS
+
+    captured = capsys.readouterr()
+
+    assert captured.out == ""
+    assert "findings: 0" in captured.err
+
+
+def test_main_quiet_all_files(tmp_path, monkeypatch, capsys):
+
+    (tmp_path / "a.py").write_text("def f(a, b, c, d, e, f):\n    return a\n")
+
+    _main_all_files(tmp_path, monkeypatch, "a.py\n")
+
+    assert main(["--quiet", "--all-files"]) == VIOLATIONS_FOUND
+
+    assert capsys.readouterr().out == ""
+
+
+def test_main_quiet_staged(tmp_path, monkeypatch, capsys):
+
+    (tmp_path / "a.py").write_text("def f(a, b, c, d, e, f):\n    return a\n")
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        "scrut.git.subprocess.run",
+        Mock(
+            side_effect=[
+                Mock(returncode=0, stdout=""),
+                Mock(returncode=0, stdout="a.py\n"),
+            ]
+        ),
+    )
+
+    assert main(["--quiet", "--staged"]) == VIOLATIONS_FOUND
+
+    assert capsys.readouterr().out == ""
+
+
+def test_main_help_lists_quiet(capsys):
+
+    with pytest.raises(SystemExit):
+        main(["--help"])
+
+    assert "--quiet" in capsys.readouterr().out
+
+
 def _main_all_files(tmp_path, monkeypatch, stdout):
 
     monkeypatch.chdir(tmp_path)

@@ -30,6 +30,11 @@ def main(argv=None):
         help="print step-by-step review details to stderr",
     )
     parser.add_argument(
+        "--quiet",
+        action="store_true",
+        help="suppress the normal report; errors and exit codes are unchanged",
+    )
+    parser.add_argument(
         "--changed",
         action="store_true",
         help="show added and deleted lines of files changed vs Git HEAD instead of the findings report",
@@ -128,10 +133,11 @@ def main(argv=None):
 
     if args.json:
         render_json(functions_reports, file_reports, class_reports)
-    elif args.changed:
-        render_diff_view(reviewable_files)
-    else:
-        generate_report(functions_reports, file_reports, class_reports)
+    elif not args.quiet:
+        if args.changed:
+            render_diff_view(reviewable_files)
+        else:
+            generate_report(functions_reports, file_reports, class_reports)
 
     reports = class_reports + functions_reports + file_reports
 

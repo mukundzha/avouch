@@ -72,6 +72,7 @@ not by the command line.
     scrut --help        argparse help for every option
     scrut --docs        this documentation; exits without reviewing
     scrut --verbose     step-by-step review details on stderr
+    scrut --quiet       suppress the normal report; errors and exit codes are unchanged
     scrut --changed     show added/deleted lines of changed files instead of the report
     scrut --staged      review only files with staged Git changes
     scrut --all-files   review every eligible Python file, not just the diff
