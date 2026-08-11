@@ -1,9 +1,13 @@
+import ast
 import os
 import re
 import shutil
 import sys
 import unicodedata
 import json
+from pathlib import Path
+
+from scrut.git import get_file_diff
 
 _USE_COLOR = sys.stdout.isatty()
 
@@ -30,6 +34,11 @@ _TERMINAL_WIDTH = shutil.get_terminal_size((80, 24)).columns
 _COUNT = re.compile(r"\((\d+/\d+)\)")
 
 _ANSI = re.compile(r"\x1b\[[0-9;]*m")
+
+_HUNK = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@")
+
+# Unchanged lines kept around each changed region
+_CTX = 1
 
 _RAIL = "│  "
 
@@ -100,6 +109,149 @@ def render_json(function_reports, file_reports, class_reports):
     }
 
     print(json.dumps({"version": 1, "violations": violations, "summary": summary}, indent=2))
+
+
+def render_diff_view(file_paths):
+
+    _set_font()
+    print(_style("scrut", _BOLD) + " " + _style("[Changed Files]", _DIM))
+
+    for index, file_path in enumerate(file_paths):
+
+        if index:
+            print()
+
+        added, deleted, hunks, labels = _diff_view(file_path)
+
+        print(
+            _style("╭─ ", _DIM)
+            + _style(file_path, _BOLD, _CYAN)
+            + _style(" +", _GREEN)
+            + _style(str(added), _GREEN)
+            + _style(" -", _RED)
+            + _style(str(deleted), _RED)
+        )
+
+        for hunk in hunks:
+            _render_hunk(hunk, labels)
+
+
+def _diff_view(file_path):
+
+    text = get_file_diff(file_path)
+
+    if text is None:
+        try:
+            lines = Path(file_path).read_text(encoding="utf-8").splitlines()
+        except (OSError, UnicodeDecodeError):
+            lines = []
+        hunks = [[("add", number, line) for number, line in enumerate(lines, 1)]]
+        return len(lines), 0, hunks, _context_labels(file_path)
+
+    added, deleted, hunks = _parse_diff(text)
+
+    return added, deleted, hunks, _context_labels(file_path)
+
+
+def _parse_diff(text):
+
+    added = 0
+    deleted = 0
+    hunks = []
+    hunk = None
+    new_pos = 0
+
+    for line in text.splitlines():
+
+        if line.startswith("@@"):
+            match = _HUNK.match(line)
+            if not match:
+                continue
+            new_pos = int(match.group(1))
+            hunk = []
+            hunks.append(hunk)
+            continue
+
+        if hunk is None or line.startswith("\\"):
+            continue
+
+        tag = line[0]
+
+        if tag == "+":
+            added += 1
+            hunk.append(("add", new_pos, line[1:]))
+            new_pos += 1
+        elif tag == "-":
+            deleted += 1
+            hunk.append(("del", None, line[1:]))
+        elif tag == " ":
+            hunk.append(("ctx", new_pos, line[1:]))
+            new_pos += 1
+
+    return added, deleted, [_trim_hunk(hunk) for hunk in hunks]
+
+
+def _trim_hunk(hunk):
+
+    first = None
+    last = None
+
+    for index, (tag, _, _) in enumerate(hunk):
+
+        if tag != "ctx":
+            if first is None:
+                first = index
+            last = index
+
+    if first is None:
+        return []
+
+    return hunk[max(0, first - _CTX) : last + 1 + _CTX]
+
+
+def _render_hunk(hunk, labels):
+
+    current_label = None
+
+    for tag, line_number, text in hunk:
+
+        if tag != "del":
+            label = labels.get(line_number)
+
+            if label and label != current_label:
+                print(_style(label, _DIM))
+                current_label = label
+
+        if tag == "add":
+            print(_style("+ " + text, _GREEN))
+        elif tag == "del":
+            print(_style("- " + text, _RED))
+        else:
+            print("│ " + text)
+
+
+def _context_labels(file_path):
+
+    try:
+        tree = ast.parse(Path(file_path).read_text(encoding="utf-8"))
+    except (OSError, SyntaxError, UnicodeDecodeError):
+        return {}
+
+    labels = {}
+
+    for node in ast.walk(tree):
+
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                label = f"def {node.name}"
+            else:
+                label = f"class {node.name}"
+
+            for line in range(node.lineno, node.end_lineno + 1):
+                labels[line] = label
+
+    return labels
 
 
 def render_report(function_reports, file_reports, class_reports):

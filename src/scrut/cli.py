@@ -4,7 +4,7 @@ from pathlib import Path
 from scrut.config.loader import DEFAULT_RULES, load_config
 from scrut.config.default import DEFAULT_LIMITS
 from scrut.analyzer import analyze_file
-from scrut.report import generate_report, render_json, vlog
+from scrut.report import generate_report, render_diff_view, render_json, vlog
 from scrut.utility.docs import DOCS
 from scrut.git import is_gitrepo, get_changed_files, get_all_files, get_reviewable_files
 
@@ -32,7 +32,7 @@ def main(argv=None):
     parser.add_argument(
         "--changed",
         action="store_true",
-        help="review only files changed vs Git HEAD (the default review set)",
+        help="show added and deleted lines of files changed vs Git HEAD instead of the findings report",
     )
     parser.add_argument(
         "--all-files",
@@ -114,6 +114,8 @@ def main(argv=None):
 
     if args.json:
         render_json(functions_reports, file_reports, class_reports)
+    elif args.changed:
+        render_diff_view(reviewable_files)
     else:
         generate_report(functions_reports, file_reports, class_reports)
 

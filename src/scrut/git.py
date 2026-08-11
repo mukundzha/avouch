@@ -26,6 +26,23 @@ def get_changed_files():
     return changed
 
 
+def get_file_diff(file_path):
+    tracked = subprocess.run(
+        ["git", "ls-files", "--error-unmatch", "--", file_path],
+        capture_output=True,
+        text=True,
+    )
+
+    if tracked.returncode != 0:
+        return None
+
+    result = subprocess.run(
+        ["git", "diff", "HEAD", "--", file_path], capture_output=True, text=True
+    )
+
+    return result.stdout
+
+
 def get_all_files():
     result = subprocess.run(
         ["git", "ls-files", "--cached", "--others", "--exclude-standard"],
