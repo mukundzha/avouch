@@ -25,7 +25,7 @@ Git repository -> changed .py files -> ast.parse -> rules -> findings
    (src/scrut/config/loader.py, src/scrut/config/default.py).
 2. Verify the working directory is a Git repository
    (git rev-parse --is-inside-work-tree). Otherwise print
-   "Not inside a Git repository." to stderr and exit 2.
+   "error: no Git repository found" to stderr and exit 2.
 3. Compute the review set (src/scrut/git.py):
    - git diff HEAD --name-only        (staged + unstaged changes)
    - git diff --cached --name-only    (staged changes only, with --staged)
@@ -33,8 +33,7 @@ Git repository -> changed .py files -> ast.parse -> rules -> findings
    - keep paths that are existing .py files, not generated files
      (src/scrut/utility/is_generated.py), and not covered by ignore
      paths (src/scrut/utility/is_ignored.py).
-   If nothing remains, print "No Python files to review." to stderr and
-   exit 2.
+   If nothing remains, print "nothing to review" to stderr and exit 2.
 4. Parse each reviewable file with ast.parse and walk the tree once
    (src/scrut/analyzer.py). A file that cannot be read or parsed
    becomes an ERROR finding; the rest of the review continues.
@@ -313,11 +312,13 @@ EXAMPLES
 
     # outside a Git repository
     scrut
-    Not inside a Git repository.          (exit 2)
+    error: no Git repository found
+    hint: run Scrut from inside a Git repository   (exit 2)
 
     # no changed Python files
     scrut
-    No Python files to review.            (exit 2)
+    nothing to review
+    hint: change or stage .py files, or use --all-files   (exit 2)
 
     # a clean run
     scrut

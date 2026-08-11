@@ -68,7 +68,8 @@ def main(argv=None):
     try:
         config = load_config()
     except ValueError as exc:
-        print(f"Invalid scrut.toml: {exc}", file=sys.stderr)
+        print(f"error: invalid scrut.toml configuration: {exc}", file=sys.stderr)
+        print("hint: check the [limits], [rules], and ignore_paths sections", file=sys.stderr)
         return ERROR
 
     rules = config.get("rules", DEFAULT_RULES)
@@ -77,7 +78,8 @@ def main(argv=None):
     ignore_paths = list(dict.fromkeys(ignore_paths))
 
     if not is_gitrepo():
-        print("Not inside a Git repository.", file=sys.stderr)
+        print("error: no Git repository found", file=sys.stderr)
+        print("hint: run Scrut from inside a Git repository", file=sys.stderr)
         return ERROR
 
     if args.all_files:
@@ -90,7 +92,8 @@ def main(argv=None):
     reviewable_files = get_reviewable_files(candidate_files, ignore_paths)
 
     if not reviewable_files:
-        print("No Python files to review.", file=sys.stderr)
+        print("nothing to review", file=sys.stderr)
+        print("hint: change or stage .py files, or use --all-files", file=sys.stderr)
         return ERROR
 
     vlog(

@@ -166,11 +166,13 @@ scrut [Review Summary]
 ```text
 $ cd /tmp/somewhere-without-git
 $ scrut
-Not inside a Git repository.
+error: no Git repository found
+hint: run Scrut from inside a Git repository
 
 $ cd ~/repo-with-no-python-changes
 $ scrut
-No Python files to review.
+nothing to review
+hint: change or stage .py files, or use --all-files
 ```
 
 Colors are ANSI codes emitted only when stdout is a TTY. Piped output is
@@ -235,8 +237,7 @@ and react to the exit status (`0` clean, `1` violations, `2` Scrut error).
 `--quiet` runs the exact same analysis but prints no report; only the
 exit code signals the outcome (`0` clean, `1` violations, `2` Scrut
 error), which makes it fit hooks and scripts that need only the status.
-Errors are never silenced: messages such as "Not inside a Git
-repository." still print, `--json` still emits its document, and
+Errors are never silenced: messages such as "error: no Git repository found" still print, `--json` still emits its document, and
 `--verbose` diagnostics still go to stderr.
 
 ---

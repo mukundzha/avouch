@@ -744,7 +744,7 @@ def test_main_returns_1_on_violations(tmp_path, monkeypatch, capsys):
 def test_main_returns_2_on_error(mock_is_gitrepo, capsys):
 
     assert main([]) == ERROR
-    assert "Not inside a Git repository." in capsys.readouterr().err
+    assert "no Git repository found" in capsys.readouterr().err
 
 
 @patch("scrut.cli.is_gitrepo")
@@ -811,7 +811,7 @@ def test_main_verbose_quiet_when_nothing_to_review(tmp_path, monkeypatch, capsys
     captured = capsys.readouterr()
 
     assert captured.out == ""
-    assert captured.err == "No Python files to review.\n"
+    assert captured.err == "nothing to review\nhint: change or stage .py files, or use --all-files\n"
 
 
 def test_main_verbose_keeps_normal_mode_quiet(tmp_path, monkeypatch, capsys):
@@ -909,14 +909,14 @@ def test_main_changed_no_changed_files(tmp_path, monkeypatch, capsys):
     _main_git(tmp_path, monkeypatch, "")
 
     assert main(["--changed"]) == ERROR
-    assert "No Python files to review." in capsys.readouterr().err
+    assert "nothing to review" in capsys.readouterr().err
 
 
 @patch("scrut.cli.is_gitrepo", return_value=False)
 def test_main_changed_outside_git_repo(mock_is_gitrepo, capsys):
 
     assert main(["--changed"]) == ERROR
-    assert "Not inside a Git repository." in capsys.readouterr().err
+    assert "no Git repository found" in capsys.readouterr().err
 
 
 def _main_staged(tmp_path, monkeypatch, stdout):
@@ -965,14 +965,14 @@ def test_main_staged_uses_findings_report(tmp_path, monkeypatch, capsys):
 def test_main_staged_no_staged_files(tmp_path, monkeypatch, capsys):
 
     assert _main_staged(tmp_path, monkeypatch, "") == ERROR
-    assert "No Python files to review." in capsys.readouterr().err
+    assert "nothing to review" in capsys.readouterr().err
 
 
 @patch("scrut.cli.is_gitrepo", return_value=False)
 def test_main_staged_outside_git_repo(mock_is_gitrepo, capsys):
 
     assert main(["--staged"]) == ERROR
-    assert "Not inside a Git repository." in capsys.readouterr().err
+    assert "no Git repository found" in capsys.readouterr().err
 
 
 def test_main_staged_ignores_unstaged_changes(tmp_path, monkeypatch, capsys):
@@ -1038,7 +1038,10 @@ def test_main_invalid_config_reports_error(tmp_path, monkeypatch, capsys):
 
     assert main([]) == ERROR
 
-    assert "Invalid scrut.toml" in capsys.readouterr().err
+    captured = capsys.readouterr()
+
+    assert "invalid scrut.toml configuration" in captured.err
+    assert "hint: check the [limits], [rules], and ignore_paths sections" in captured.err
 
 
 def test_main_quiet_clean_suppresses_output(tmp_path, monkeypatch, capsys):
@@ -1083,14 +1086,18 @@ def test_main_quiet_errors_remain_visible(tmp_path, monkeypatch, capsys):
     _main_git(tmp_path, monkeypatch, "")
 
     assert main(["--quiet"]) == ERROR
-    assert "No Python files to review." in capsys.readouterr().err
+
+    captured = capsys.readouterr()
+
+    assert captured.out == ""
+    assert "nothing to review" in captured.err
 
 
 @patch("scrut.cli.is_gitrepo", return_value=False)
 def test_main_quiet_error_outside_git_repo(mock_is_gitrepo, capsys):
 
     assert main(["--quiet"]) == ERROR
-    assert "Not inside a Git repository." in capsys.readouterr().err
+    assert "no Git repository found" in capsys.readouterr().err
 
 
 def test_main_quiet_json_still_valid(tmp_path, monkeypatch, capsys):
@@ -1338,7 +1345,11 @@ def test_main_json_multiple_files(tmp_path, monkeypatch, capsys):
 def test_main_json_error_exit_code(mock_is_gitrepo, capsys):
 
     assert main(["--json"]) == ERROR
-    assert "Not inside a Git repository." in capsys.readouterr().err
+
+    captured = capsys.readouterr()
+
+    assert captured.out == ""
+    assert "no Git repository found" in captured.err
 
 
 def test_main_changed_json_is_machine_readable(tmp_path, monkeypatch, capsys):
