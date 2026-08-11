@@ -1,4 +1,5 @@
 import argparse
+import sys
 from pathlib import Path
 
 from scrut.config.loader import DEFAULT_RULES, load_config
@@ -15,7 +16,15 @@ ERROR = 2
 
 def main(argv=None):
 
-    parser = argparse.ArgumentParser(prog="scrut")
+    parser = argparse.ArgumentParser(
+        prog="scrut",
+        epilog=(
+            "By default scrut reviews Python files changed vs Git HEAD, "
+            "including untracked files. Exit codes: 0 = clean, "
+            "1 = findings reported, 2 = error. Run 'scrut --docs' for the "
+            "full documentation."
+        ),
+    )
     parser.add_argument("--docs", action="store_true", help="show built-in documentation and exit")
     parser.add_argument("--json", action="store_true", help="print findings as JSON")
     parser.add_argument(
@@ -34,20 +43,21 @@ def main(argv=None):
         action="store_true",
         help="suppress the normal report; errors and exit codes are unchanged",
     )
-    parser.add_argument(
+    selection = parser.add_mutually_exclusive_group()
+    selection.add_argument(
         "--changed",
         action="store_true",
         help="show added and deleted lines of files changed vs Git HEAD instead of the findings report",
     )
-    parser.add_argument(
+    selection.add_argument(
         "--staged",
         action="store_true",
         help="review only files with staged Git changes",
     )
-    parser.add_argument(
+    selection.add_argument(
         "--all-files",
         action="store_true",
-        help="review all Python files in the repository, not only changed files",
+        help="review every eligible Python file in the repository",
     )
     args = parser.parse_args(argv)
 
@@ -55,14 +65,19 @@ def main(argv=None):
         print(DOCS)
         return SUCCESS
 
-    config = load_config()
+    try:
+        config = load_config()
+    except ValueError as exc:
+        print(f"Invalid scrut.toml: {exc}", file=sys.stderr)
+        return ERROR
+
     rules = config.get("rules", DEFAULT_RULES)
     limits = config.get("limits", DEFAULT_LIMITS)
     ignore_paths = config.get("ignore_paths", []) + (args.ignore_path or [])
     ignore_paths = list(dict.fromkeys(ignore_paths))
 
     if not is_gitrepo():
-        print("Not inside a Git repository.")
+        print("Not inside a Git repository.", file=sys.stderr)
         return ERROR
 
     if args.all_files:
@@ -75,7 +90,7 @@ def main(argv=None):
     reviewable_files = get_reviewable_files(candidate_files, ignore_paths)
 
     if not reviewable_files:
-        print("No Python files to review.")
+        print("No Python files to review.", file=sys.stderr)
         return ERROR
 
     vlog(

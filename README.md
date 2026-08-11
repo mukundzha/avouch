@@ -109,6 +109,10 @@ never appear in the output. Files that look generated
 (`generated.py`, `*_generated.py`, `codegen.py`, `autogen.py`, … — see
 `src/scrut/utility/is_generated.py`) are skipped too.
 
+The review-scope flags `--changed`, `--staged`, and `--all-files` are
+mutually exclusive — pick at most one. The output flags `--json`,
+`--verbose`, and `--quiet` combine freely with any review scope.
+
 ### A run with findings
 
 ```text
@@ -170,9 +174,10 @@ No Python files to review.
 ```
 
 Colors are ANSI codes emitted only when stdout is a TTY. Piped output is
-plain, so `scrut | tee review.log` and CI capture work cleanly. The exit
-code is `0` when the review is clean, `1` when findings are reported, and
-`2` when Scrut cannot run.
+plain, so `scrut | tee review.log` and CI capture work cleanly. Runtime
+errors are written to stderr, so stdout stays clean for piping and
+`--json` capture. The exit code is `0` when the review is clean, `1`
+when findings are reported, and `2` when Scrut cannot run.
 
 ### Built-in documentation
 

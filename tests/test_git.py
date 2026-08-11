@@ -744,7 +744,7 @@ def test_main_returns_1_on_violations(tmp_path, monkeypatch, capsys):
 def test_main_returns_2_on_error(mock_is_gitrepo, capsys):
 
     assert main([]) == ERROR
-    assert "Not inside a Git repository." in capsys.readouterr().out
+    assert "Not inside a Git repository." in capsys.readouterr().err
 
 
 @patch("scrut.cli.is_gitrepo")
@@ -810,8 +810,8 @@ def test_main_verbose_quiet_when_nothing_to_review(tmp_path, monkeypatch, capsys
 
     captured = capsys.readouterr()
 
-    assert captured.out == "No Python files to review.\n"
-    assert captured.err == ""
+    assert captured.out == ""
+    assert captured.err == "No Python files to review.\n"
 
 
 def test_main_verbose_keeps_normal_mode_quiet(tmp_path, monkeypatch, capsys):
@@ -887,19 +887,36 @@ def test_main_changed_reviews_same_files_as_default(tmp_path, monkeypatch, capsy
     assert "bad.py" in changed_out
 
 
+@pytest.mark.parametrize(
+    "flags",
+    [
+        ["--changed", "--staged"],
+        ["--changed", "--all-files"],
+        ["--staged", "--all-files"],
+    ],
+)
+def test_main_selection_flags_are_mutually_exclusive(flags, capsys):
+
+    with pytest.raises(SystemExit) as exc:
+        main(flags)
+
+    assert exc.value.code == 2
+    assert "not allowed with argument" in capsys.readouterr().err
+
+
 def test_main_changed_no_changed_files(tmp_path, monkeypatch, capsys):
 
     _main_git(tmp_path, monkeypatch, "")
 
     assert main(["--changed"]) == ERROR
-    assert "No Python files to review." in capsys.readouterr().out
+    assert "No Python files to review." in capsys.readouterr().err
 
 
 @patch("scrut.cli.is_gitrepo", return_value=False)
 def test_main_changed_outside_git_repo(mock_is_gitrepo, capsys):
 
     assert main(["--changed"]) == ERROR
-    assert "Not inside a Git repository." in capsys.readouterr().out
+    assert "Not inside a Git repository." in capsys.readouterr().err
 
 
 def _main_staged(tmp_path, monkeypatch, stdout):
@@ -948,14 +965,14 @@ def test_main_staged_uses_findings_report(tmp_path, monkeypatch, capsys):
 def test_main_staged_no_staged_files(tmp_path, monkeypatch, capsys):
 
     assert _main_staged(tmp_path, monkeypatch, "") == ERROR
-    assert "No Python files to review." in capsys.readouterr().out
+    assert "No Python files to review." in capsys.readouterr().err
 
 
 @patch("scrut.cli.is_gitrepo", return_value=False)
 def test_main_staged_outside_git_repo(mock_is_gitrepo, capsys):
 
     assert main(["--staged"]) == ERROR
-    assert "Not inside a Git repository." in capsys.readouterr().out
+    assert "Not inside a Git repository." in capsys.readouterr().err
 
 
 def test_main_staged_ignores_unstaged_changes(tmp_path, monkeypatch, capsys):
@@ -986,6 +1003,42 @@ def test_main_staged_ignores_unstaged_changes(tmp_path, monkeypatch, capsys):
     assert result == SUCCESS
     assert "All clean." in out
     assert "b.py" not in out
+
+
+def test_main_staged_respects_ignore_paths(tmp_path, monkeypatch, capsys):
+
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "app.py").write_text("def f(a, b, c, d, e, f):\n    return a\n")
+    (tmp_path / "tests" / "bad.py").write_text("def f(a, b, c, d, e, f):\n    return a\n")
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        "scrut.git.subprocess.run",
+        Mock(
+            side_effect=[
+                Mock(returncode=0, stdout=""),
+                Mock(returncode=0, stdout="app.py\ntests/bad.py\n"),
+            ]
+        ),
+    )
+
+    assert main(["--staged", "--ignore-path", "tests"]) == VIOLATIONS_FOUND
+
+    captured = capsys.readouterr()
+
+    assert "app.py" in captured.out
+    assert "tests/bad.py" not in captured.out
+
+
+def test_main_invalid_config_reports_error(tmp_path, monkeypatch, capsys):
+
+    (tmp_path / "scrut.toml").write_text("[limits\n")
+
+    monkeypatch.chdir(tmp_path)
+
+    assert main([]) == ERROR
+
+    assert "Invalid scrut.toml" in capsys.readouterr().err
 
 
 def test_main_quiet_clean_suppresses_output(tmp_path, monkeypatch, capsys):
@@ -1030,14 +1083,14 @@ def test_main_quiet_errors_remain_visible(tmp_path, monkeypatch, capsys):
     _main_git(tmp_path, monkeypatch, "")
 
     assert main(["--quiet"]) == ERROR
-    assert "No Python files to review." in capsys.readouterr().out
+    assert "No Python files to review." in capsys.readouterr().err
 
 
 @patch("scrut.cli.is_gitrepo", return_value=False)
 def test_main_quiet_error_outside_git_repo(mock_is_gitrepo, capsys):
 
     assert main(["--quiet"]) == ERROR
-    assert "Not inside a Git repository." in capsys.readouterr().out
+    assert "Not inside a Git repository." in capsys.readouterr().err
 
 
 def test_main_quiet_json_still_valid(tmp_path, monkeypatch, capsys):
@@ -1285,4 +1338,69 @@ def test_main_json_multiple_files(tmp_path, monkeypatch, capsys):
 def test_main_json_error_exit_code(mock_is_gitrepo, capsys):
 
     assert main(["--json"]) == ERROR
-    assert "Not inside a Git repository." in capsys.readouterr().out
+    assert "Not inside a Git repository." in capsys.readouterr().err
+
+
+def test_main_changed_json_is_machine_readable(tmp_path, monkeypatch, capsys):
+
+    body = "".join(f"    if x{i}:\n        pass\n" for i in range(10))
+    (tmp_path / "bad.py").write_text("def f(x):\n" + body)
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        "scrut.git.subprocess.run",
+        Mock(
+            side_effect=[
+                Mock(returncode=0, stdout=""),
+                Mock(returncode=0, stdout="bad.py\n"),
+                Mock(returncode=0, stdout=""),
+            ]
+        ),
+    )
+
+    assert main(["--changed", "--json"]) == VIOLATIONS_FOUND
+
+    out = capsys.readouterr().out
+
+    assert "[Changed Files]" not in out
+    assert "\x1b" not in out
+    assert json.loads(out)["summary"]["total"] == 1
+
+
+def test_main_staged_json_is_machine_readable(tmp_path, monkeypatch, capsys):
+
+    body = "".join(f"    if x{i}:\n        pass\n" for i in range(10))
+    (tmp_path / "bad.py").write_text("def f(x):\n" + body)
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        "scrut.git.subprocess.run",
+        Mock(
+            side_effect=[
+                Mock(returncode=0, stdout=""),
+                Mock(returncode=0, stdout="bad.py\n"),
+            ]
+        ),
+    )
+
+    assert main(["--staged", "--json"]) == VIOLATIONS_FOUND
+
+    out = capsys.readouterr().out
+
+    assert "\x1b" not in out
+    assert json.loads(out)["summary"]["total"] == 1
+
+
+def test_main_all_files_json_is_machine_readable(tmp_path, monkeypatch, capsys):
+
+    body = "".join(f"    if x{i}:\n        pass\n" for i in range(10))
+    (tmp_path / "bad.py").write_text("def f(x):\n" + body)
+
+    _main_all_files(tmp_path, monkeypatch, "bad.py\n")
+
+    assert main(["--all-files", "--json"]) == VIOLATIONS_FOUND
+
+    out = capsys.readouterr().out
+
+    assert "\x1b" not in out
+    assert json.loads(out)["summary"]["total"] == 1
