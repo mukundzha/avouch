@@ -41,6 +41,17 @@ def main(argv=None):
     ignore_paths = config.get("ignore_paths", []) + (args.ignore_path or [])
     ignore_paths = list(dict.fromkeys(ignore_paths))
 
+    if not is_gitrepo():
+        print("Not inside a Git repository.")
+        return ERROR
+
+    changed_files = get_changed_files()
+    reviewable_files = get_reviewable_files(changed_files, ignore_paths)
+
+    if not reviewable_files:
+        print("No Python files to review.")
+        return ERROR
+
     vlog(
         args.verbose,
         f"config: {'scrut.toml' if Path('scrut.toml').exists() else 'defaults (no scrut.toml)'}, "
@@ -50,20 +61,11 @@ def main(argv=None):
         args.verbose,
         "review mode: changed files vs HEAD (git diff HEAD --name-only) + untracked files",
     )
-
-    if not is_gitrepo():
-        print("Not inside a Git repository.")
-        return ERROR
-
-    changed_files = get_changed_files()
-    reviewable_files = get_reviewable_files(changed_files, ignore_paths)
-
     vlog(
         args.verbose,
         f"reviewing {len(reviewable_files)} of {len(changed_files)} "
         f"changed file{'s' if len(reviewable_files) != 1 else ''}",
     )
-
     if args.verbose:
         names = ", ".join(reviewable_files[:10])
 
@@ -71,10 +73,6 @@ def main(argv=None):
             names += ", ..."
 
         vlog(True, f"review set: {names}")
-
-    if not reviewable_files:
-        print("No Python files to review.")
-        return ERROR
 
     file_reports = []
     functions_reports = []

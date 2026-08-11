@@ -794,6 +794,18 @@ def test_main_verbose_reports_diagnostics(tmp_path, monkeypatch, capsys):
     assert "All clean." in captured.out
 
 
+def test_main_verbose_quiet_when_nothing_to_review(tmp_path, monkeypatch, capsys):
+
+    _main_git(tmp_path, monkeypatch, "")
+
+    assert main(["--verbose"]) == ERROR
+
+    captured = capsys.readouterr()
+
+    assert captured.out == "No Python files to review.\n"
+    assert captured.err == ""
+
+
 def test_main_verbose_keeps_normal_mode_quiet(tmp_path, monkeypatch, capsys):
 
     (tmp_path / "a.py").write_text("def ok():\n    pass\n")
