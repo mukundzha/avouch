@@ -39,8 +39,8 @@ Git repository -> changed .py files -> ast.parse -> rules -> findings
    becomes an ERROR finding; the rest of the review continues.
 5. Run the rules enabled by the config against functions, async
    functions, classes, and files (see REVIEW RULES below).
-6. Print the report: human-readable by default, JSON with --json
-   (src/scrut/report.py).
+6. Print the report: human-readable by default (suppressed with
+   --quiet), JSON with --json (src/scrut/report.py).
 7. Exit status: 0 = clean, 1 = findings reported, 2 = Scrut could
    not run.
 
