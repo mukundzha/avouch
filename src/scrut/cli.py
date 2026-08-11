@@ -6,7 +6,7 @@ from scrut.config.default import DEFAULT_LIMITS
 from scrut.analyzer import analyze_file
 from scrut.report import generate_report, render_diff_view, render_json, vlog
 from scrut.utility.docs import DOCS
-from scrut.git import is_gitrepo, get_changed_files, get_all_files, get_reviewable_files
+from scrut.git import is_gitrepo, get_changed_files, get_staged_files, get_all_files, get_reviewable_files
 
 SUCCESS = 0
 VIOLATIONS_FOUND = 1
@@ -35,6 +35,11 @@ def main(argv=None):
         help="show added and deleted lines of files changed vs Git HEAD instead of the findings report",
     )
     parser.add_argument(
+        "--staged",
+        action="store_true",
+        help="review only files with staged Git changes",
+    )
+    parser.add_argument(
         "--all-files",
         action="store_true",
         help="review all Python files in the repository, not only changed files",
@@ -57,6 +62,8 @@ def main(argv=None):
 
     if args.all_files:
         candidate_files = get_all_files()
+    elif args.staged:
+        candidate_files = get_staged_files()
     else:
         candidate_files = get_changed_files()
 
@@ -77,6 +84,13 @@ def main(argv=None):
             args.verbose,
             f"reviewing {len(reviewable_files)} of {len(candidate_files)} "
             f"repository file{'s' if len(reviewable_files) != 1 else ''}",
+        )
+    elif args.staged:
+        vlog(args.verbose, "review mode: staged files (git diff --cached --name-only)")
+        vlog(
+            args.verbose,
+            f"reviewing {len(reviewable_files)} of {len(candidate_files)} "
+            f"staged file{'s' if len(reviewable_files) != 1 else ''}",
         )
     else:
         vlog(

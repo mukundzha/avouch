@@ -28,6 +28,7 @@ Git repository -> changed .py files -> ast.parse -> rules -> findings
    "Not inside a Git repository." and exit 2.
 3. Compute the review set (src/scrut/git.py):
    - git diff HEAD --name-only        (staged + unstaged changes)
+   - git diff --cached --name-only    (staged changes only, with --staged)
    - git ls-files --others --exclude-standard   (untracked files)
    - keep paths that are existing .py files, not generated files
      (src/scrut/utility/is_generated.py), and not covered by ignore
@@ -72,6 +73,7 @@ not by the command line.
     scrut --docs        this documentation; exits without reviewing
     scrut --verbose     step-by-step review details on stderr
     scrut --changed     show added/deleted lines of changed files instead of the report
+    scrut --staged      review only files with staged Git changes
     scrut --all-files   review every eligible Python file, not just the diff
 
 CONFIGURATION

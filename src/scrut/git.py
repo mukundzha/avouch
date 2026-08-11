@@ -43,6 +43,15 @@ def get_file_diff(file_path):
     return result.stdout
 
 
+def get_staged_files():
+
+    result = subprocess.run(
+        ["git", "diff", "--cached", "--name-only"], capture_output=True, text=True
+    )
+
+    return result.stdout.splitlines()
+
+
 def get_all_files():
     result = subprocess.run(
         ["git", "ls-files", "--cached", "--others", "--exclude-standard"],

@@ -92,6 +92,7 @@ scrut --json     # one JSON document on stdout
 scrut --docs     # built-in documentation; no review performed
 scrut --verbose  # step-by-step review details on stderr
 scrut --changed  # compact added/deleted view of changed files vs HEAD
+scrut --staged   # review only files staged for the next commit
 scrut --all-files  # review every eligible Python file, not just the diff
 scrut --help     # every flag
 ```
@@ -625,7 +626,7 @@ flowchart LR
 |--------|------|-------------|
 | `cli.py` | Pipeline wiring | `main()` |
 | `docs.py` (in `utility/`) | Built-in `--docs` text | `DOCS` |
-| `git.py` | Git interaction | `is_gitrepo`, `get_changed_files`, `get_reviewable_files` |
+| `git.py` | Git interaction | `is_gitrepo`, `get_changed_files`, `get_staged_files`, `get_reviewable_files` |
 | `analyzer.py` | AST analysis | `read_file`, `analyze_file` |
 | `rules/*.py` | One rule per module | `analyze(node, limits)` |
 | `report.py` | Terminal + JSON rendering | `render_report`, `generate_report`, `render_json` |
@@ -638,9 +639,11 @@ flowchart LR
 2. `git.is_gitrepo()` — `git rev-parse --is-inside-work-tree`; exits the
    run with a message if not a repo.
 3. `git.get_changed_files()` — `git diff HEAD --name-only` plus untracked
-   files; `get_reviewable_files()` keeps existing `.py` paths that are
-   neither generated (`is_generated`) nor covered by ignore paths
-   (`is_ignored`); if none remain, prints a message and exits `2`.
+   files; `git.get_staged_files()` — `git diff --cached --name-only` — is
+   used with `--staged`; `get_reviewable_files()` keeps existing `.py`
+   paths that are neither generated (`is_generated`) nor covered by
+   ignore paths (`is_ignored`); if none remain, prints a message and
+   exits `2`.
 4. Per file, `analyzer.analyze_file(path, limits, rules)`:
    - reads UTF-8 (`OSError` → `ERROR` report), parses with `ast.parse`
      (`SyntaxError` → `ERROR` report; the rest of the run continues),

@@ -6,7 +6,7 @@ from unittest.mock import Mock, patch
 import pytest
 
 from scrut.analyzer import analyze_file, get_depth, read_file
-from scrut.git import get_changed_files, get_reviewable_files, is_gitrepo
+from scrut.git import get_changed_files, get_staged_files, get_reviewable_files, is_gitrepo
 from scrut.report import generate_report
 from scrut.cli import main, SUCCESS, VIOLATIONS_FOUND, ERROR
 from scrut.config.default import DEFAULT_LIMITS
@@ -41,6 +41,14 @@ def test_get_changed_files(mock_run):
     ]
 
     assert get_changed_files() == ["a.py", "b.py", "README.md", "new.py"]
+
+
+@patch("scrut.git.subprocess.run")
+def test_get_staged_files(mock_run):
+
+    mock_run.return_value = Mock(stdout="a.py\nb.py\n", returncode=0)
+
+    assert get_staged_files() == ["a.py", "b.py"]
 
 
 def test_get_reviewable_files(tmp_path):
@@ -875,7 +883,8 @@ def test_main_changed_reviews_same_files_as_default(tmp_path, monkeypatch, capsy
     assert run(["--changed"]) == VIOLATIONS_FOUND
     changed_out = capsys.readouterr().out
 
-    assert changed_out == normal_out
+    assert "bad.py" in normal_out
+    assert "bad.py" in changed_out
 
 
 def test_main_changed_no_changed_files(tmp_path, monkeypatch, capsys):
@@ -891,6 +900,92 @@ def test_main_changed_outside_git_repo(mock_is_gitrepo, capsys):
 
     assert main(["--changed"]) == ERROR
     assert "Not inside a Git repository." in capsys.readouterr().out
+
+
+def _main_staged(tmp_path, monkeypatch, stdout):
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        "scrut.git.subprocess.run",
+        Mock(
+            side_effect=[
+                Mock(returncode=0, stdout=""),
+                Mock(returncode=0, stdout=stdout),
+            ]
+        ),
+    )
+
+    return main(["--staged"])
+
+
+def test_main_staged_selects_multiple_files(tmp_path, monkeypatch, capsys):
+
+    (tmp_path / "a.py").write_text("def ok():\n    pass\n")
+    (tmp_path / "b.py").write_text("def f(a, b, c, d, e, f):\n    return a\n")
+    (tmp_path / "notes.txt").write_text("x\n")
+
+    assert _main_staged(tmp_path, monkeypatch, "a.py\nb.py\nnotes.txt\n") == VIOLATIONS_FOUND
+
+    out = capsys.readouterr().out
+
+    assert "✓ a.py" in out
+    assert "Too many parameters" in out
+    assert "notes.txt" not in out
+
+
+def test_main_staged_uses_findings_report(tmp_path, monkeypatch, capsys):
+
+    (tmp_path / "a.py").write_text("def ok():\n    pass\n")
+
+    assert _main_staged(tmp_path, monkeypatch, "a.py\n") == SUCCESS
+
+    out = capsys.readouterr().out
+
+    assert "All clean." in out
+    assert "[Changed Files]" not in out
+
+
+def test_main_staged_no_staged_files(tmp_path, monkeypatch, capsys):
+
+    assert _main_staged(tmp_path, monkeypatch, "") == ERROR
+    assert "No Python files to review." in capsys.readouterr().out
+
+
+@patch("scrut.cli.is_gitrepo", return_value=False)
+def test_main_staged_outside_git_repo(mock_is_gitrepo, capsys):
+
+    assert main(["--staged"]) == ERROR
+    assert "Not inside a Git repository." in capsys.readouterr().out
+
+
+def test_main_staged_ignores_unstaged_changes(tmp_path, monkeypatch, capsys):
+
+    def git(*args):
+        subprocess.run(["git", *args], cwd=tmp_path, check=True, capture_output=True)
+
+    git("init", "-q")
+    git("config", "user.email", "test@example.com")
+    git("config", "user.name", "Test")
+
+    (tmp_path / "a.py").write_text("def a():\n    pass\n")
+    (tmp_path / "b.py").write_text("def b():\n    pass\n")
+    git("add", "-A")
+    git("-c", "commit.gpgsign=false", "commit", "-q", "-m", "initial")
+
+    (tmp_path / "a.py").write_text("def a():\n    return 1\n")
+    body = "".join(f"    if x{i}:\n        pass\n" for i in range(10))
+    (tmp_path / "b.py").write_text("def b(x):\n" + body)
+    git("add", "a.py")
+
+    monkeypatch.chdir(tmp_path)
+
+    result = main(["--staged"])
+
+    out = capsys.readouterr().out
+
+    assert result == SUCCESS
+    assert "All clean." in out
+    assert "b.py" not in out
 
 
 def _main_all_files(tmp_path, monkeypatch, stdout):
