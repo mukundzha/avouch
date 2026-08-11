@@ -29,6 +29,11 @@ def main(argv=None):
         action="store_true",
         help="print step-by-step review details to stderr",
     )
+    parser.add_argument(
+        "--changed",
+        action="store_true",
+        help="review only files changed vs Git HEAD (the default review set)",
+    )
     args = parser.parse_args(argv)
 
     if args.docs:

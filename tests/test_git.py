@@ -850,6 +850,49 @@ def test_main_verbose_findings_unchanged(tmp_path, monkeypatch, capsys):
     assert "findings: 1" in verbose.err
 
 
+def test_main_changed_reviews_same_files_as_default(tmp_path, monkeypatch, capsys):
+
+    body = "".join(f"    if x{i}:\n        pass\n" for i in range(10))
+    (tmp_path / "bad.py").write_text("def f(x):\n" + body)
+
+    monkeypatch.chdir(tmp_path)
+
+    def run(mode):
+
+        order = {"call": 0}
+
+        def fake_run(*args, **kwargs):
+            order["call"] += 1
+            return Mock(returncode=0, stdout="bad.py\n" if order["call"] == 3 else "")
+
+        monkeypatch.setattr("scrut.git.subprocess.run", fake_run)
+
+        return main(mode)
+
+    assert run([]) == VIOLATIONS_FOUND
+    normal_out = capsys.readouterr().out
+
+    assert run(["--changed"]) == VIOLATIONS_FOUND
+    changed_out = capsys.readouterr().out
+
+    assert changed_out == normal_out
+
+
+def test_main_changed_no_changed_files(tmp_path, monkeypatch, capsys):
+
+    _main_git(tmp_path, monkeypatch, "")
+
+    assert main(["--changed"]) == ERROR
+    assert "No Python files to review." in capsys.readouterr().out
+
+
+@patch("scrut.cli.is_gitrepo", return_value=False)
+def test_main_changed_outside_git_repo(mock_is_gitrepo, capsys):
+
+    assert main(["--changed"]) == ERROR
+    assert "Not inside a Git repository." in capsys.readouterr().out
+
+
 def _main_json(tmp_path, monkeypatch, stdout):
 
     monkeypatch.chdir(tmp_path)
