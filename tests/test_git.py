@@ -893,6 +893,69 @@ def test_main_changed_outside_git_repo(mock_is_gitrepo, capsys):
     assert "Not inside a Git repository." in capsys.readouterr().out
 
 
+def _main_all_files(tmp_path, monkeypatch, stdout):
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        "scrut.git.subprocess.run",
+        Mock(
+            side_effect=[
+                Mock(returncode=0, stdout=""),
+                Mock(returncode=0, stdout=stdout),
+            ]
+        ),
+    )
+
+
+def test_main_all_files_selects_every_python_file(tmp_path, monkeypatch, capsys):
+
+    (tmp_path / "a.py").write_text("def ok():\n    pass\n")
+    (tmp_path / "b.py").write_text("def ok():\n    pass\n")
+    (tmp_path / "c.py").write_text("def f(a, b, c, d, e, f):\n    return a\n")
+
+    _main_all_files(tmp_path, monkeypatch, "a.py\nb.py\nc.py\nnotes.txt\n")
+
+    assert main(["--all-files"]) == VIOLATIONS_FOUND
+
+    captured = capsys.readouterr()
+
+    assert "✓ a.py" in captured.out
+    assert "✓ b.py" in captured.out
+    assert "c.py" in captured.out
+    assert "Too many parameters" in captured.out
+
+
+def test_main_all_files_respects_ignore_paths(tmp_path, monkeypatch, capsys):
+
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "app.py").write_text("def f(a, b, c, d, e, f):\n    return a\n")
+    (tmp_path / "tests" / "bad.py").write_text("def f(a, b, c, d, e, f):\n    return a\n")
+
+    _main_all_files(tmp_path, monkeypatch, "app.py\ntests/bad.py\n")
+
+    assert main(["--all-files", "--ignore-path", "tests"]) == VIOLATIONS_FOUND
+
+    captured = capsys.readouterr()
+
+    assert "app.py" in captured.out
+    assert "tests/bad.py" not in captured.out
+
+
+def test_main_all_files_skips_generated(tmp_path, monkeypatch, capsys):
+
+    (tmp_path / "app.py").write_text("def f(a, b, c, d, e, f):\n    return a\n")
+    (tmp_path / "generated.py").write_text("def f(a, b, c, d, e, f):\n    return a\n")
+
+    _main_all_files(tmp_path, monkeypatch, "app.py\ngenerated.py\n")
+
+    assert main(["--all-files"]) == VIOLATIONS_FOUND
+
+    captured = capsys.readouterr()
+
+    assert "app.py" in captured.out
+    assert "generated.py" not in captured.out
+
+
 def _main_json(tmp_path, monkeypatch, stdout):
 
     monkeypatch.chdir(tmp_path)

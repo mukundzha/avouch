@@ -6,7 +6,7 @@ from scrut.config.default import DEFAULT_LIMITS
 from scrut.analyzer import analyze_file
 from scrut.report import generate_report, render_json, vlog
 from scrut.utility.docs import DOCS
-from scrut.git import is_gitrepo, get_changed_files, get_reviewable_files
+from scrut.git import is_gitrepo, get_changed_files, get_all_files, get_reviewable_files
 
 SUCCESS = 0
 VIOLATIONS_FOUND = 1
@@ -34,6 +34,11 @@ def main(argv=None):
         action="store_true",
         help="review only files changed vs Git HEAD (the default review set)",
     )
+    parser.add_argument(
+        "--all-files",
+        action="store_true",
+        help="review all Python files in the repository, not only changed files",
+    )
     args = parser.parse_args(argv)
 
     if args.docs:
@@ -50,8 +55,12 @@ def main(argv=None):
         print("Not inside a Git repository.")
         return ERROR
 
-    changed_files = get_changed_files()
-    reviewable_files = get_reviewable_files(changed_files, ignore_paths)
+    if args.all_files:
+        candidate_files = get_all_files()
+    else:
+        candidate_files = get_changed_files()
+
+    reviewable_files = get_reviewable_files(candidate_files, ignore_paths)
 
     if not reviewable_files:
         print("No Python files to review.")
@@ -62,15 +71,23 @@ def main(argv=None):
         f"config: {'scrut.toml' if Path('scrut.toml').exists() else 'defaults (no scrut.toml)'}, "
         f"{len(ignore_paths)} ignore path(s)",
     )
-    vlog(
-        args.verbose,
-        "review mode: changed files vs HEAD (git diff HEAD --name-only) + untracked files",
-    )
-    vlog(
-        args.verbose,
-        f"reviewing {len(reviewable_files)} of {len(changed_files)} "
-        f"changed file{'s' if len(reviewable_files) != 1 else ''}",
-    )
+    if args.all_files:
+        vlog(args.verbose, "review mode: all repository files (git ls-files)")
+        vlog(
+            args.verbose,
+            f"reviewing {len(reviewable_files)} of {len(candidate_files)} "
+            f"repository file{'s' if len(reviewable_files) != 1 else ''}",
+        )
+    else:
+        vlog(
+            args.verbose,
+            "review mode: changed files vs HEAD (git diff HEAD --name-only) + untracked files",
+        )
+        vlog(
+            args.verbose,
+            f"reviewing {len(reviewable_files)} of {len(candidate_files)} "
+            f"changed file{'s' if len(reviewable_files) != 1 else ''}",
+        )
     if args.verbose:
         names = ", ".join(reviewable_files[:10])
 

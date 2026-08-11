@@ -92,6 +92,7 @@ scrut --json     # one JSON document on stdout
 scrut --docs     # built-in documentation; no review performed
 scrut --verbose  # step-by-step review details on stderr
 scrut --changed  # review only files changed vs HEAD (already the default)
+scrut --all-files  # review every eligible Python file, not just the diff
 scrut --help     # every flag
 ```
 

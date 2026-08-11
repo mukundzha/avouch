@@ -26,6 +26,15 @@ def get_changed_files():
     return changed
 
 
+def get_all_files():
+    result = subprocess.run(
+        ["git", "ls-files", "--cached", "--others", "--exclude-standard"],
+        capture_output=True,
+        text=True,
+    )
+    return result.stdout.splitlines()
+
+
 def get_reviewable_files(files, ignore_paths=()):
 
     reviewable = []

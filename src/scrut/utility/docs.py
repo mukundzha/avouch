@@ -72,6 +72,7 @@ not by the command line.
     scrut --docs        this documentation; exits without reviewing
     scrut --verbose     step-by-step review details on stderr
     scrut --changed     explicit review of changed files (the default)
+    scrut --all-files   review every eligible Python file, not just the diff
 
 CONFIGURATION
 -------------
