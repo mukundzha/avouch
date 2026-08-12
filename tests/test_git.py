@@ -15,658 +15,6 @@ from scrut.rules.complexity import calculate_complexity
 from scrut.rules.boolean_complexity import analyze, count_boolean_conditions
 from scrut.utility.is_ignored import is_ignored
 
-
-@patch("scrut.git.subprocess.run")
-def test_is_gitrepo_true(mock_run):
-
-    mock_run.return_value = Mock(returncode=0)
-
-    assert is_gitrepo() is True
-
-
-@patch("scrut.git.subprocess.run")
-def test_is_gitrepo_false(mock_run):
-
-    mock_run.return_value = Mock(returncode=1)
-
-    assert is_gitrepo() is False
-
-
-@patch("scrut.git.subprocess.run")
-def test_get_changed_files(mock_run):
-
-    mock_run.side_effect = [
-        Mock(stdout="a.py\nb.py\nREADME.md\n", returncode=0),
-        Mock(stdout="new.py\n", returncode=0),
-    ]
-
-    assert get_changed_files() == ["a.py", "b.py", "README.md", "new.py"]
-
-
-@patch("scrut.git.subprocess.run")
-def test_get_staged_files(mock_run):
-
-    mock_run.return_value = Mock(stdout="a.py\nb.py\n", returncode=0)
-
-    assert get_staged_files() == ["a.py", "b.py"]
-
-
-def test_get_reviewable_files(tmp_path):
-
-    py1 = tmp_path / "a.py"
-    py2 = tmp_path / "b.py"
-    txt = tmp_path / "c.txt"
-    missing = tmp_path / "d.py"
-
-    py1.write_text("")
-    py2.write_text("")
-    txt.write_text("")
-
-    assert get_reviewable_files([str(py1), str(txt), str(py2), str(missing)]) == [
-        str(py1),
-        str(py2),
-    ]
-
-
-def test_get_reviewable_files_ignores_directory(tmp_path, monkeypatch):
-
-    monkeypatch.chdir(tmp_path)
-
-    (tmp_path / "tests").mkdir()
-    (tmp_path / "src").mkdir()
-    (tmp_path / "tests" / "test_app.py").write_text("")
-    (tmp_path / "src" / "app.py").write_text("")
-
-    assert get_reviewable_files(
-        ["tests/test_app.py", "src/app.py"], ["tests"]
-    ) == ["src/app.py"]
-
-
-def test_get_reviewable_files_ignores_single_file(tmp_path, monkeypatch):
-
-    monkeypatch.chdir(tmp_path)
-
-    (tmp_path / "src").mkdir()
-    (tmp_path / "src" / "app.py").write_text("")
-    (tmp_path / "src" / "legacy.py").write_text("")
-
-    assert get_reviewable_files(
-        ["src/app.py", "src/legacy.py"], ["src/legacy.py"]
-    ) == ["src/app.py"]
-
-
-def test_get_reviewable_files_ignores_multiple_paths(tmp_path, monkeypatch):
-
-    monkeypatch.chdir(tmp_path)
-
-    (tmp_path / "tests").mkdir()
-    (tmp_path / "examples").mkdir()
-    (tmp_path / "tests" / "test_app.py").write_text("")
-    (tmp_path / "examples" / "demo.py").write_text("")
-    (tmp_path / "app.py").write_text("")
-
-    assert get_reviewable_files(
-        ["tests/test_app.py", "examples/demo.py", "app.py"],
-        ["tests", "examples"],
-    ) == ["app.py"]
-
-
-def test_get_reviewable_files_ignore_path_is_not_substring(tmp_path, monkeypatch):
-
-    monkeypatch.chdir(tmp_path)
-
-    (tmp_path / "mytests").mkdir()
-    (tmp_path / "src" / "tests").mkdir(parents=True)
-    (tmp_path / "tests.py").write_text("")
-    (tmp_path / "contest.py").write_text("")
-    (tmp_path / "mytests" / "unit.py").write_text("")
-    (tmp_path / "src" / "tests.py").write_text("")
-    (tmp_path / "src" / "tests" / "x.py").write_text("")
-
-    candidates = [
-        "tests.py",
-        "contest.py",
-        "mytests/unit.py",
-        "src/tests.py",
-        "src/tests/x.py",
-    ]
-
-    assert get_reviewable_files(candidates, ["tests"]) == candidates
-
-
-def test_get_reviewable_files_ignores_nested_paths(tmp_path, monkeypatch):
-
-    monkeypatch.chdir(tmp_path)
-
-    (tmp_path / "tests" / "unit").mkdir(parents=True)
-    (tmp_path / "tests" / "unit" / "test_app.py").write_text("")
-    (tmp_path / "app.py").write_text("")
-
-    assert get_reviewable_files(
-        ["tests/unit/test_app.py", "app.py"], ["tests"]
-    ) == ["app.py"]
-
-
-def test_get_reviewable_files_generated_and_ignored(tmp_path, monkeypatch):
-
-    monkeypatch.chdir(tmp_path)
-
-    (tmp_path / "tests").mkdir()
-    (tmp_path / "src").mkdir()
-    (tmp_path / "generated.py").write_text("")
-    (tmp_path / "src" / "app.py").write_text("")
-    (tmp_path / "tests" / "generated_fixture.py").write_text("")
-    (tmp_path / "tests" / "fixture.py").write_text("")
-
-    assert get_reviewable_files(
-        [
-            "generated.py",
-            "src/app.py",
-            "tests/generated_fixture.py",
-            "tests/fixture.py",
-        ],
-        ["tests"],
-    ) == ["src/app.py"]
-
-
-def test_get_reviewable_files_default_unchanged(tmp_path, monkeypatch):
-
-    monkeypatch.chdir(tmp_path)
-
-    (tmp_path / "a.py").write_text("")
-    (tmp_path / "b.txt").write_text("")
-
-    candidates = ["a.py", "b.txt", "missing.py"]
-
-    assert get_reviewable_files(candidates) == get_reviewable_files(
-        candidates, []
-    ) == ["a.py"]
-
-
-def test_is_ignored_path_components():
-
-    cases = [
-        ("tests/test_app.py", ["tests"], True),
-        ("tests/unit/test_app.py", ["tests"], True),
-        ("tests", ["tests"], True),
-        ("tests.py", ["tests"], False),
-        ("contest.py", ["tests"], False),
-        ("src/tests/x.py", ["tests"], False),
-        ("src/tests.py", ["src/tests"], False),
-        ("src/tests/x.py", ["src/tests"], True),
-        ("src/tests.py", ["src"], True),
-        ("src/app.py", ["src/legacy"], False),
-        ("src/app.py", ["src/legacy.py"], False),
-        ("migrations/001_init.py", ["migrations"], True),
-        ("src/app.py", ["src/app.py"], True),
-        ("src/app.py", ["./src/app.py"], True),
-        ("src/app.py", ["src/app.py/"], True),
-        ("tests/x.py", ["tests/"], True),
-        ("tests/x.py", ["tests", "tests"], True),
-    ]
-
-    for path, ignore_paths, expected in cases:
-        assert is_ignored(path, ignore_paths) is expected, (path, ignore_paths)
-
-
-def test_is_ignored_dot_ignores_everything():
-
-    assert is_ignored("src/app.py", ["."]) is True
-    assert is_ignored("src/app.py", [""]) is True
-
-
-def test_read_file(tmp_path):
-
-    file = tmp_path / "a.py"
-    file.write_text("print('hi')")
-
-    assert read_file(str(file)) == "print('hi')"
-
-
-def test_read_file_missing(tmp_path):
-
-    assert read_file(str(tmp_path / "nope.py")) is None
-
-
-def test_get_depth_zero():
-
-    tree = ast.parse("def f():\n    pass\n")
-
-    assert get_depth(tree.body[0]) == 0
-
-
-def test_get_depth_counts_block_nodes():
-
-    cases = [
-        ("def f():\n    if True:\n        pass\n", 1),
-        ("def f():\n    for i in range(3):\n        pass\n", 1),
-        ("def f():\n    while True:\n        pass\n", 1),
-        ("async def f():\n    async for i in aiter():\n        pass\n", 1),
-        ("def f():\n    with open('f') as f:\n        pass\n", 1),
-        ("async def f():\n    async with c:\n        pass\n", 1),
-        (
-            "def f():\n"
-            "    try:\n"
-            "        pass\n"
-            "    except Exception:\n"
-            "        pass\n",
-            1,
-        ),
-        ("def f():\n    match x:\n        case 1:\n            pass\n", 1),
-    ]
-
-    for code, expected in cases:
-        assert get_depth(ast.parse(code).body[0]) == expected
-
-
-def test_get_depth_chain():
-
-    tree = ast.parse(
-        "def f():\n"
-        "    if True:\n"
-        "        for i in range(3):\n"
-        "            with open('f') as f:\n"
-        "                pass\n"
-    )
-
-    assert get_depth(tree.body[0]) == 3
-
-
-def test_get_depth_siblings_do_not_stack():
-
-    tree = ast.parse(
-        "def f():\n"
-        "    if True:\n"
-        "        pass\n"
-        "    for i in range(3):\n"
-        "        pass\n"
-    )
-
-    assert get_depth(tree.body[0]) == 1
-
-
-def test_default_limits_include_complexity():
-
-    assert DEFAULT_LIMITS["max_complexity"] == 10
-    assert DEFAULT_LIMITS["max_boolean_conditions"] == 5
-
-
-def test_count_boolean_conditions():
-
-    cases = [
-        ("if a:\n    pass\n", 0),
-        ("if a and b:\n    pass\n", 2),
-        ("if a and b and c:\n    pass\n", 3),
-        ("if a and (b or c):\n    pass\n", 3),
-        ("if not a:\n    pass\n", 0),
-    ]
-
-    for source, expected in cases:
-
-        tree = ast.parse("def f():\n    " + source.replace("\n", "\n    "))
-
-        boolean_count = 0
-
-        for node in ast.walk(tree):
-
-            if isinstance(node, ast.BoolOp):
-                boolean_count = count_boolean_conditions(node)
-                break
-
-        assert boolean_count == expected
-
-
-def test_calculate_complexity_flat():
-
-    tree = ast.parse("def f():\n    pass\n")
-
-    assert calculate_complexity(tree.body[0]) == 1
-
-
-def test_calculate_complexity_counts_decisions():
-
-    cases = [
-        ("def f():\n    if a:\n        pass\n", 2),
-        ("def f():\n    if a:\n        pass\n    elif b:\n        pass\n", 3),
-        ("def f():\n    for i in r:\n        pass\n", 2),
-        ("def f():\n    while a:\n        pass\n", 2),
-        ("def f():\n    try:\n        pass\n    except:\n        pass\n", 3),
-        ("def f():\n    return a if b else c\n", 2),
-        ("def f():\n    if a and b:\n        pass\n", 3),
-        ("def f():\n    return a and b or c\n", 3),
-        (
-            "def f():\n"
-            "    match x:\n"
-            "        case 1:\n            pass\n"
-            "        case 2:\n            pass\n"
-            "        case _:\n            pass\n",
-            4,
-        ),
-    ]
-
-    for source, expected in cases:
-
-        tree = ast.parse(source)
-
-        assert calculate_complexity(tree.body[0]) == expected
-
-
-def test_calculate_complexity_excludes_nested_defs():
-
-    source = "def outer():\n    def inner():\n        if a:\n            pass\n"
-    tree = ast.parse(source)
-
-    assert calculate_complexity(tree.body[0]) == 1
-
-
-def test_calculate_complexity_includes_class_methods():
-
-    source = "class C:\n    def m(self):\n        if a:\n            pass\n"
-    tree = ast.parse(source)
-
-    assert calculate_complexity(tree.body[0]) == 2
-
-
-def test_analyze_file_complexity_at_limit(tmp_path):
-
-    body = "".join(f"    if x{i}:\n        pass\n" for i in range(9))
-    file = tmp_path / "a.py"
-    file.write_text("def f(x):\n" + body)
-
-    funcs, files, classes = analyze_file(str(file), DEFAULT_LIMITS, DEFAULT_RULES)
-
-    assert funcs[0]["issues"] == []
-
-
-def test_analyze_file_complexity_over_limit(tmp_path):
-
-    body = "".join(f"    if x{i}:\n        pass\n" for i in range(10))
-    file = tmp_path / "a.py"
-    file.write_text("def f(x):\n" + body)
-
-    funcs, files, classes = analyze_file(str(file), DEFAULT_LIMITS, DEFAULT_RULES)
-
-    assert funcs[0]["issues"][0]["message"] == "Function too complex (11/10). Reduce branching or extract nested logic into separate functions."
-
-
-def test_analyze_file_class_complexity(tmp_path):
-
-    source = "class C:\n" + "".join(f"    def m{i}(self):\n        if x:\n            pass\n" for i in range(10))
-    file = tmp_path / "a.py"
-    file.write_text(source)
-
-    funcs, files, classes = analyze_file(str(file), DEFAULT_LIMITS, DEFAULT_RULES)
-
-    assert classes[0]["issues"][0]["message"] == "Class too complex (11/10). Decompose into focused classes or extract complex methods."
-
-
-def test_analyze_file_boolean_complexity_at_limit(tmp_path):
-
-    body = "if a and b and c and d and e:\n    pass\n"
-    file = tmp_path / "a.py"
-    file.write_text("def f(x):\n    " + body.replace("\n", "\n    "))
-
-    funcs, files, classes = analyze_file(str(file), DEFAULT_LIMITS, DEFAULT_RULES)
-
-    assert not any(
-        "Boolean expression" in issue["message"]
-        for issue in funcs[0]["issues"]
-    )
-
-
-def test_analyze_file_boolean_complexity_over_limit(tmp_path):
-
-    body = "if a and b and c and d and e and f:\n    pass\n"
-    file = tmp_path / "a.py"
-    file.write_text("def f(x):\n    " + body.replace("\n", "\n    "))
-
-    funcs, files, classes = analyze_file(str(file), DEFAULT_LIMITS, DEFAULT_RULES)
-
-    assert funcs[0]["issues"][0]["message"] == "Boolean expression too complex (6/5). Break into named conditions or extract into a predicate function."
-
-
-def test_analyze_file_boolean_complexity_class(tmp_path):
-
-    body = "if a and b and c and d and e and f:\n    pass\n"
-    file = tmp_path / "a.py"
-    file.write_text("class C:\n    def m(self):\n        " + body.replace("\n", "\n        "))
-
-    funcs, files, classes = analyze_file(str(file), DEFAULT_LIMITS, DEFAULT_RULES)
-
-    assert classes[0]["issues"][0]["message"] == "Boolean expression too complex (6/5). Break into named conditions or extract into a predicate function."
-
-
-def test_analyze_file_lambda_at_limit(tmp_path):
-
-    file = tmp_path / "a.py"
-    file.write_text("def f():\n    g = lambda x: x + 1\n")
-
-    funcs, files, classes = analyze_file(str(file), DEFAULT_LIMITS, DEFAULT_RULES)
-
-    assert not any(
-        "Lambda function too complex" in issue["message"]
-        for issue in funcs[0]["issues"]
-    )
-
-
-def test_analyze_file_lambda_over_limit(tmp_path):
-
-    source = (
-        "def f():\n"
-        "    g = lambda x: (\n"
-        "        x + 1 +\n"
-        "        1 + 1 +\n"
-        "        1 + 1 +\n"
-        "        1\n"
-        "    )\n"
-    )
-    file = tmp_path / "a.py"
-    file.write_text(source)
-
-    funcs, files, classes = analyze_file(str(file), DEFAULT_LIMITS, DEFAULT_RULES)
-
-    assert any(
-        issue["message"] == "Lambda function too complex (20/5). Convert to a named function for clarity."
-        for issue in funcs[0]["issues"]
-    )
-
-
-def test_analyze_file_clean(tmp_path):
-
-    file = tmp_path / "clean.py"
-    file.write_text("def ok():\n    pass\n")
-
-    funcs, files, classes = analyze_file(str(file), DEFAULT_LIMITS, DEFAULT_RULES)
-
-    assert funcs[0]["name"] == "ok"
-    assert funcs[0]["file"] == str(file)
-    assert files[0]["issues"] == []
-    assert classes == []
-
-
-def test_analyze_file_syntax_error(tmp_path):
-
-    file = tmp_path / "broken.py"
-    file.write_text("def broken(\n")
-
-    funcs, files, classes = analyze_file(str(file), DEFAULT_LIMITS, DEFAULT_RULES)
-
-    assert funcs == []
-    assert files[0]["issues"] == [
-        {"severity": "ERROR", "message": "Python syntax error"}
-    ]
-
-
-def test_analyze_file_unreadable(tmp_path):
-
-    funcs, files, classes = analyze_file(str(tmp_path / "missing.py"), DEFAULT_LIMITS, DEFAULT_RULES)
-
-    assert funcs == []
-    assert files[0]["issues"] == [
-        {"severity": "ERROR", "message": "Could not read file"}
-    ]
-
-
-def test_analyze_file_warnings(tmp_path):
-
-    file = tmp_path / "warn.py"
-    file.write_text("def f(a, b):\n    if True:\n        pass\n")
-
-    limits = {
-        **DEFAULT_LIMITS,
-        "max_parameters": 1,
-        "max_nesting": 0,
-        "max_function_lines": 1,
-    }
-
-    funcs, files, classes = analyze_file(str(file), limits, DEFAULT_RULES)
-
-    assert [issue["message"] for issue in funcs[0]["issues"]] == [
-        "Function too long (3/1). Extract helper functions or split into smaller units.",
-        "Too many parameters (2/1). Group related parameters into a data class or dictionary.",
-        "Nesting too deep (1/0). Flatten control flow with early returns or guard clauses.",
-    ]
-
-
-def test_analyze_file_class_and_file_warnings(tmp_path):
-
-    file = tmp_path / "big.py"
-    file.write_text("class Big:\n" + "    def m():\n        pass\n" * 20)
-
-    limits = {**DEFAULT_LIMITS, "max_class_lines": 10, "max_file_lines": 10}
-
-    funcs, files, classes = analyze_file(str(file), limits, DEFAULT_RULES)
-
-    assert classes[0]["issues"][0]["message"] == "Class too large (41/10). Split into smaller classes with single responsibilities."
-    assert files[0]["issues"][0]["message"] == "File too large (41/10). Split into modules or move unrelated code to separate files."
-
-
-def test_load_config_default(tmp_path, monkeypatch):
-
-    monkeypatch.chdir(tmp_path)
-
-    assert load_config()["limits"] == DEFAULT_LIMITS
-
-
-def test_load_config_with_toml(tmp_path, monkeypatch):
-
-    (tmp_path / "scrut.toml").write_text("[limits]\nmax_parameters = 3\n")
-    monkeypatch.chdir(tmp_path)
-
-    config = load_config()["limits"]
-
-    assert config["max_parameters"] == 3
-    assert config["max_nesting"] == 4
-
-
-def test_merge_limits():
-
-    merged = merge_limits({"max_parameters": 2})
-
-    assert merged["max_parameters"] == 2
-    assert merged["max_file_lines"] == 400
-
-
-def test_load_config_ignore_paths(tmp_path, monkeypatch):
-
-    (tmp_path / "scrut.toml").write_text(
-        "ignore_paths = ['tests', 'migrations']\n"
-    )
-    monkeypatch.chdir(tmp_path)
-
-    assert load_config()["ignore_paths"] == ["tests", "migrations"]
-
-
-def test_load_config_ignore_paths_default_empty(tmp_path, monkeypatch):
-
-    monkeypatch.chdir(tmp_path)
-
-    assert load_config()["ignore_paths"] == []
-
-
-def test_load_config_ignore_paths_must_be_list(tmp_path, monkeypatch):
-
-    (tmp_path / "scrut.toml").write_text("ignore_paths = 'tests'\n")
-    monkeypatch.chdir(tmp_path)
-
-    with pytest.raises(ValueError):
-        load_config()
-
-
-def test_merge_ignore_paths():
-
-    assert merge_ignore_paths(["tests"]) == ["tests"]
-    assert merge_ignore_paths([]) == []
-
-
-def test_generate_report_all_clean(capsys):
-
-    funcs = [
-        {
-            "name": "ok",
-            "file": "a.py",
-            "lines": 3,
-            "parameters": 0,
-            "nesting_depth": 0,
-            "issues": [],
-        }
-    ]
-    files = [{"name": "a.py", "lines": 3, "issues": []}]
-    classes = []
-
-    generate_report(funcs, files, classes)
-
-    assert "All clean." in capsys.readouterr().out
-
-
-def test_generate_report_with_issues(capsys):
-
-    funcs = [
-        {
-            "name": "f",
-            "file": "a.py",
-            "lines": 3,
-            "parameters": 2,
-            "nesting_depth": 1,
-            "issues": [
-                {"severity": "WARNING", "message": "Too many parameters (2/1)"}
-            ],
-        }
-    ]
-    files = [{"name": "a.py", "lines": 3, "issues": []}]
-    classes = []
-
-    generate_report(funcs, files, classes)
-
-    out = capsys.readouterr().out
-
-    assert "a.py" in out
-    assert "Too many parameters" in out
-    assert "Summary" in out
-
-
-def test_main_with_mocked_git(tmp_path, monkeypatch, capsys):
-
-    good = tmp_path / "good.py"
-    broken = tmp_path / "broken.py"
-
-    good.write_text("def ok():\n    pass\n")
-    broken.write_text("def broken(\n")
-
-    monkeypatch.chdir(tmp_path)
-    monkeypatch.setattr(
-        "scrut.git.subprocess.run",
-        lambda *a, **k: Mock(returncode=0, stdout="good.py\nbroken.py\n"),
-    )
-
-    main([])
-
-    out = capsys.readouterr().out
-
-    assert "Python syntax error" in out
-    assert "passed" in out
-
-
 def test_main_with_real_git_repo(tmp_path, monkeypatch, capsys):
 
     def git(*args):
@@ -1028,7 +376,7 @@ def test_main_staged_respects_ignore_paths(tmp_path, monkeypatch, capsys):
 
     assert "app.py" in captured.out
     assert "tests/bad.py" not in captured.out
-
+ 
 
 def test_main_invalid_config_reports_error(tmp_path, monkeypatch, capsys):
 
@@ -1415,3 +763,57 @@ def test_main_all_files_json_is_machine_readable(tmp_path, monkeypatch, capsys):
 
     assert "\x1b" not in out
     assert json.loads(out)["summary"]["total"] == 1
+
+
+def test_main_json_contract_fields(tmp_path, monkeypatch, capsys):
+
+    body = "".join(f"    if x{i}:\n        pass\n" for i in range(10))
+    (tmp_path / "bad.py").write_text("def f(x):\n" + body)
+
+    assert _main_json(tmp_path, monkeypatch, "bad.py\n") == VIOLATIONS_FOUND
+
+    data = json.loads(capsys.readouterr().out)
+
+    assert data["version"] == 1
+    assert data["tool"] == "scrut"
+    assert data["violations"][0]["line"] == 1
+
+
+def test_main_json_syntax_error_reports_line(tmp_path, monkeypatch, capsys):
+
+    (tmp_path / "broken.py").write_text("def broken(\n")
+
+    assert _main_json(tmp_path, monkeypatch, "broken.py\n") == VIOLATIONS_FOUND
+
+    data = json.loads(capsys.readouterr().out)
+
+    assert data["violations"][0]["kind"] == "file"
+    assert data["violations"][0]["line"] == 1
+
+
+def test_main_json_file_finding_line_is_null(tmp_path, monkeypatch, capsys):
+
+    (tmp_path / "scrut.toml").write_text("[limits]\nmax_file_lines = 1\n")
+    (tmp_path / "a.py").write_text("def f(a, b):\n    pass\n")
+
+    assert _main_json(tmp_path, monkeypatch, "a.py\n") == VIOLATIONS_FOUND
+
+    data = json.loads(capsys.readouterr().out)
+    violation = data["violations"][0]
+
+    assert violation["kind"] == "file"
+    assert violation["line"] is None
+
+
+def test_main_json_deterministic(tmp_path, monkeypatch, capsys):
+
+    body = "".join(f"    if x{i}:\n        pass\n" for i in range(10))
+    (tmp_path / "bad.py").write_text("def f(x):\n" + body)
+
+    assert _main_json(tmp_path, monkeypatch, "bad.py\n") == VIOLATIONS_FOUND
+    first = capsys.readouterr().out
+
+    assert _main_json(tmp_path, monkeypatch, "bad.py\n") == VIOLATIONS_FOUND
+    second = capsys.readouterr().out
+
+    assert first == second

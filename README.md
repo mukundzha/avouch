@@ -203,6 +203,7 @@ scrut --json
 ```json
 {
   "version": 1,
+  "tool": "scrut",
   "violations": [
     {
       "rule": "SCR014",
@@ -210,7 +211,8 @@ scrut --json
       "message": "Too many parameters (6/5). Group related parameters into a data class or dictionary.",
       "file": "buggy.py",
       "name": "extra",
-      "kind": "func"
+      "kind": "func",
+      "line": 4
     }
   ],
   "summary": {
@@ -224,11 +226,18 @@ scrut --json
 
 Each violation carries the rule id (or a human-readable label when the
 finding has none), its severity, the message, the file, the component name,
-and its kind (`func`, `class`, or `file`) — the same component and kind
-shown in the human table. `files_with_violations` is the number of distinct
-files containing at least one violation. Exit codes behave exactly as in
-normal mode, so `scrut --json` can gate CI: parse stdout for the findings
-and react to the exit status (`0` clean, `1` violations, `2` Scrut error).
+its kind (`func`, `class`, or `file`), and the line the finding refers to
+(`null` for file-level findings) — the same component and kind shown in
+the human table. `files_with_violations` is the number of distinct
+files containing at least one violation.
+
+The document is a stable, versioned contract for automation: `version`
+is the schema version (independent of the Scrut package version), `tool`
+identifies the emitter, and the same input always produces the same JSON
+— no colors, timestamps, or diagnostics leak in. Exit codes behave
+exactly as in normal mode, so `scrut --json` can gate CI: parse stdout
+for the findings and react to the exit status (`0` clean, `1` violations,
+`2` Scrut error).
 
 ---
 

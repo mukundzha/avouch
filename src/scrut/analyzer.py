@@ -47,13 +47,14 @@ def analyze_file(file_path, limits, rules):
 
     try:
         parsed = ast.parse(source_code)
-    except SyntaxError:
+    except SyntaxError as exc:
         return (
             [],
             [
                 {
                     "name": file_path,
                     "lines": 0,
+                    "line": exc.lineno,
                     "issues": [{"severity": "ERROR", "message": "Python syntax error"}],
                 }
             ],
@@ -106,6 +107,7 @@ def analyze_file(file_path, limits, rules):
                 {
                     "name": node.name,
                     "file": file_path,
+                    "line": node.lineno,
                     "lines": line_count,
                     "parameters": param_count,
                     "nesting_depth": nesting_depth,
@@ -133,6 +135,7 @@ def analyze_file(file_path, limits, rules):
                 {
                     "name": node.name,
                     "file": file_path,
+                    "line": node.lineno,
                     "lines": node.end_lineno - node.lineno + 1,
                     "parameters": len(node.args.args),
                     "nesting_depth": get_depth(node),
@@ -163,6 +166,7 @@ def analyze_file(file_path, limits, rules):
                 {
                     "name": node.name,
                     "file": file_path,
+                    "line": node.lineno,
                     "lines": node.end_lineno - node.lineno + 1,
                     "issues": issues,
                 }

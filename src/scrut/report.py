@@ -98,6 +98,7 @@ def render_json(function_reports, file_reports, class_reports):
                     "file": file_name,
                     "name": item_name,
                     "kind": kind,
+                    "line": report.get("line"),
                 }
             )
 
@@ -108,7 +109,12 @@ def render_json(function_reports, file_reports, class_reports):
         "files_with_violations": len({v["file"] for v in violations}),
     }
 
-    print(json.dumps({"version": 1, "violations": violations, "summary": summary}, indent=2))
+    print(
+        json.dumps(
+            {"version": 1, "tool": "scrut", "violations": violations, "summary": summary},
+            indent=2,
+        )
+    )
 
 
 def render_diff_view(file_paths):

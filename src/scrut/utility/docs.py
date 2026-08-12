@@ -275,6 +275,7 @@ JSON (--json) prints a single document on stdout:
 
     {
       "version": 1,
+      "tool": "scrut",
       "violations": [
         {
           "rule": "SCR014",
@@ -283,7 +284,8 @@ JSON (--json) prints a single document on stdout:
                      "parameters into a data class or dictionary.",
           "file": "buggy.py",
           "name": "extra",
-          "kind": "func"
+          "kind": "func",
+          "line": 4
         }
       ],
       "summary": {
@@ -296,8 +298,13 @@ JSON (--json) prints a single document on stdout:
 
 Each violation carries its rule id (or a label derived from the
 message when the rule has none), severity, message, file, component
-name, and kind. "violations" is empty on a clean run. Exit codes are
-the same in both modes: 0 clean, 1 findings, 2 cannot run.
+name, kind, and the line the finding refers to (null for file-level
+findings). "violations" is empty on a clean run. "version" is the
+schema version and "tool" identifies the emitter, so consumers can
+verify what produced the document. Output is deterministic: the same
+input always produces the same JSON, with no colors, timestamps, or
+diagnostics mixed in. Exit codes are the same in both modes: 0 clean,
+1 findings, 2 cannot run.
 
 EXAMPLES
 --------
