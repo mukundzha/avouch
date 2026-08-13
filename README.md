@@ -24,6 +24,7 @@ scrut
 - [Installation](#installation)
 - [Quick start](#quick-start)
 - [JSON output](#json-output)
+- [GitHub Actions](#github-actions)
 - [Configuration](#configuration)
 - [Rules](#rules)
 - [How it works](#how-it-works)
@@ -248,6 +249,53 @@ exit code signals the outcome (`0` clean, `1` violations, `2` Scrut
 error), which makes it fit hooks and scripts that need only the status.
 Errors are never silenced: messages such as "error: no Git repository found" still print, `--json` still emits its document, and
 `--verbose` diagnostics still go to stderr.
+
+---
+
+## GitHub Actions
+
+Scrut can run as a GitHub Actions check on every pull request and push.
+The repository ships `.github/workflows/scrut.yml`; enable it in the
+repository's **Actions** tab and it runs on its own:
+
+```yaml
+name: Scrut
+
+on:
+  pull_request:
+  push:
+
+jobs:
+  scrut:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install Scrut
+        run: pip install -e .
+
+      - name: Run Scrut
+        run: scrut --all-files --json
+```
+
+The check installs the repository's own source with `pip install -e .`,
+so it tests the code in the pull request rather than a published release,
+then reviews the whole checked-out repository with `--all-files`. GitHub's
+checkout produces a clean working tree with no changes vs. `HEAD`, so the
+default review set (changed files) would be empty in CI; whole-repository
+review is the mode that works there. The workflow makes no GitHub API
+calls — a boring install and a single Scrut run.
+
+Results affect CI the same way they affect a local run. `--json` puts the
+machine-readable document in the job log and the exit code gates the job:
+`0` passes, `1` (findings reported) fails, `2` (Scrut could not run)
+fails too. Nothing is hidden with `|| true` — when the job fails, the
+JSON document in the log shows why. Findings already present in the
+repository will therefore fail the check until they are fixed or excluded
+with `ignore_paths` in `scrut.toml`.
 
 ---
 

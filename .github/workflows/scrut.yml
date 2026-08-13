@@ -1,0 +1,20 @@
+name: Scrut
+
+on:
+  pull_request:
+  push:
+
+jobs:
+  scrut:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install Scrut
+        run: pip install -e .
+
+      - name: Run Scrut
+        run: scrut --all-files --json
