@@ -379,7 +379,7 @@ def render_docs():
 
 def _browse():
     doc_lines, spans = _section_spans()
-    while _doc_page(0, len(doc_lines), "main screen", spans) != "quit":
+    while _doc_page((0, len(doc_lines)), "main screen", spans) != "quit":
         pass
 
 
@@ -397,11 +397,12 @@ def _section_spans():
     return lines, spans
 
 
-def _doc_page(start, end, label, spans):
-    return _page(DOCS.splitlines(), start, end, label, spans)
+def _doc_page(span, label, spans):
+    return _page(DOCS.splitlines(), span, label, spans)
 
 
-def _page(lines, start, end, label, spans):
+def _page(lines, span, label, spans):
+    start, end = span
     width, height = shutil.get_terminal_size((80, 24))
     body = max(height - 3, 5)
     pos = start
@@ -426,7 +427,7 @@ def _page(lines, start, end, label, spans):
         if key in "gG":
             target = _go_prompt(spans, width, height)
             if target is not None:
-                _doc_page(target[1], target[2], target[0].lower(), spans)
+                _doc_page((target[1], target[2]), target[0].lower(), spans)
             return
         if key in "mM":
             return
