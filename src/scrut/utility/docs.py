@@ -190,9 +190,10 @@ that cannot be read or parsed. Rules with a threshold render
     SCR004  duplicate branch (functions)
     SCR006  duplicate branch (classes)
             if/elif branches with identical bodies - copy-paste or a
-            condition that never varies. Two rule IDs implement the
-            same detection: SCR004 (detect_duplicateb) runs on
-            functions, SCR006 (empty_except) on functions and classes.
+            condition that never varies. The trailing else body is not
+            compared. Two rule IDs implement the same detection:
+            SCR004 (detect_duplicateb) runs on functions, SCR006
+            (empty_except) on functions and classes.
             scope: SCR004 funcs; SCR006 funcs + classes.
 
     SCR005  large comprehension
@@ -210,7 +211,8 @@ that cannot be read or parsed. Rules with a threshold render
 
     SCR009  too many local variables
             More distinct assigned names than the limit; measured on
-            plain assignment targets only.
+            plain assignment targets only. Assignments inside nested
+            functions count toward the enclosing function's total.
             config: max_local_variables (15). scope: functions.
 
     SCR010  class too large
@@ -235,18 +237,23 @@ that cannot be read or parsed. Rules with a threshold render
 
     SCR015  nested function definition
             A function defined inside another function, recreated
-            inside the outer call.
+            inside the outer call. Only plain defs are flagged;
+            a nested async def is not.
             scope: functions.
 
     SCR016  too many return statements
             More "return" statements than max_return_statements (3).
+            Returns inside nested functions count toward the enclosing
+            function's total.
             scope: functions.
 
     (no id) function or class too complex
             McCabe cyclomatic complexity: base 1, plus 1 for each
-            if/for/while/try/except handler/match/ternary/assert/with
-            and each extra and/or operand, summed over the whole
-            subtree. Exceeds max_complexity (10).
+            if/for/async for/while/try/except handler/match/ternary/
+            assert/with/async with and each and/or chain - a chain
+            counts 1 no matter how many operands it combines, so
+            "a and (b or c)" adds 2; summed over the whole subtree.
+            Exceeds max_complexity (10).
             scope: funcs + classes.
 
 FINDINGS AND OUTPUT

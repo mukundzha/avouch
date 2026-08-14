@@ -170,7 +170,7 @@ def _main(argv=None):
         vlog(
             args.verbose,
             f"analyzed {file_path}: {len(functions)} functions, "
-            f"{len(classes)} classes, {files[0]['lines']} lines",
+            f"{len(classes)} classes, {files[0]['lines']} lines", 
         )
         functions_reports.extend(functions)
         file_reports.extend(files)

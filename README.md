@@ -447,6 +447,8 @@ files that cannot be read or parsed. Rules with a threshold render
 
 Flags `async def` functions that never `await`. An async function without
 an `await` runs synchronously while still incurring event-loop overhead.
+This is the only rule applied to `async def` functions; the other
+function rules do not run on them.
 
 ```python
 # bad
@@ -495,7 +497,8 @@ if is_ready(a, b, c) and has_clearance(d, e, f):
 ### SCR004 / SCR006 — Duplicate branch
 
 Flags `if`/`elif` branches whose bodies are identical — a copy-paste or a
-condition that never varies. Two rule IDs cover the same detection:
+condition that never varies. The trailing `else` body is excluded from
+the comparison. Two rule IDs cover the same detection:
 SCR004 (`detect_duplicateb`) runs on functions; SCR006 (`empty_except`)
 runs on functions and classes. Both emit the same finding, and the
 report deduplicates identical rows, so one violation renders once.
@@ -536,7 +539,8 @@ result = [scale_row(row, 100) for row in matrix if row]
 
 ### SCR007 — Long if/elif chain
 
-Flags if/elif chains longer than `max_if_else_chain` (default 5).
+Flags if/elif chains longer than `max_if_chain` (default 5); the
+trailing `else` clause does not add to the chain length.
 
 ```python
 # bad
@@ -577,8 +581,9 @@ Flags functions assigning more than `max_local_variables` (default 15)
 distinct names — every new name is cognitive load and a chance for
 shadowing. The count covers plain `x = ...` assignment targets only
 (`ast.Assign` with `ast.Name` targets); augmented and unpacked
-assignments are not counted. Fix: extract groups of assignments into
-helpers.
+assignments are not counted. Assignments inside nested functions count
+toward the enclosing function's total. Fix: extract groups of
+assignments into helpers.
 
 ### SCR010 — Class too large
 
@@ -654,6 +659,7 @@ def connect(cfg: Connection, timeout: int) -> None: ...
 
 Flags a function defined inside another function. Closures that capture
 their enclosing scope run once per outer call and defeat unit testing.
+Only plain `def` definitions are flagged; a nested `async def` is not.
 
 ```python
 # bad
@@ -673,15 +679,19 @@ def process_all(data):
 ### SCR016 — Too many return statements
 
 Flags functions with more than `max_return_statements` (default 3)
-`return`s — every exit point is a path to maintain.
+`return`s — every exit point is a path to maintain. Returns inside
+nested functions count toward the enclosing function's total.
 
 ### Function / Class too complex — cyclomatic complexity
 
 Flags functions and classes whose McCabe cyclomatic complexity exceeds
 `max_complexity` (default 10). Base 1, then +1 for every `if`, `for`,
-`while`, `try`, `except` handler, `match`, ternary, `assert`, `with`,
-and every extra `and`/`or` operand. The walk covers the whole subtree:
-a class's complexity is the sum over its entire body, methods included.
+`async for`, `while`, `try`, `except` handler, `match`, ternary,
+`assert`, `with`, `async with`, and every `and`/`or` chain — an
+`and`/`or` chain counts 1 regardless of how many operands it combines,
+so `a and (b or c)` adds 2 (one per chain). The walk covers the whole
+subtree: a class's complexity is the sum over its entire body, methods
+included.
 
 ---
 
