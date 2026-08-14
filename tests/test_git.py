@@ -159,7 +159,11 @@ def test_main_verbose_quiet_when_nothing_to_review(tmp_path, monkeypatch, capsys
     captured = capsys.readouterr()
 
     assert captured.out == ""
-    assert captured.err == "nothing to review\nhint: change or stage .py files, or use --all-files\n"
+    assert captured.err == (
+        "scrut: candidate files: 0, reviewable: 0\n"
+        "error: nothing to review\n"
+        "hint: change or stage .py files, or use --all-files\n"
+    )
 
 
 def test_main_verbose_keeps_normal_mode_quiet(tmp_path, monkeypatch, capsys):
@@ -817,3 +821,188 @@ def test_main_json_deterministic(tmp_path, monkeypatch, capsys):
     second = capsys.readouterr().out
 
     assert first == second
+
+
+def test_main_unreadable_file_reports_reason(tmp_path, monkeypatch, capsys):
+
+    (tmp_path / "dir.py").mkdir()
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        "scrut.git.subprocess.run",
+        Mock(
+            side_effect=[
+                Mock(returncode=0, stdout=""),
+                Mock(returncode=0, stdout=""),
+                Mock(returncode=0, stdout="dir.py\n"),
+            ]
+        ),
+    )
+
+    assert main(["--json"]) == VIOLATIONS_FOUND
+
+    violation = json.loads(capsys.readouterr().out)["violations"][0]
+
+    assert violation["kind"] == "file"
+    assert violation["message"] == "Could not read 'dir.py': Is a directory."
+
+
+def test_main_syntax_error_reports_detail(tmp_path, monkeypatch, capsys):
+
+    (tmp_path / "broken.py").write_text("def broken(\n")
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        "scrut.git.subprocess.run",
+        Mock(
+            side_effect=[
+                Mock(returncode=0, stdout=""),
+                Mock(returncode=0, stdout=""),
+                Mock(returncode=0, stdout="broken.py\n"),
+            ]
+        ),
+    )
+
+    assert main(["--json"]) == VIOLATIONS_FOUND
+
+    violation = json.loads(capsys.readouterr().out)["violations"][0]
+
+    assert violation["kind"] == "file"
+    assert "Could not parse 'broken.py'" in violation["message"]
+    assert "line 1" in violation["message"]
+
+
+def test_main_non_utf8_file_reports_reason(tmp_path, monkeypatch, capsys):
+
+    (tmp_path / "binary.py").write_bytes(b"def f():\n    return '\xff'\n")
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        "scrut.git.subprocess.run",
+        Mock(
+            side_effect=[
+                Mock(returncode=0, stdout=""),
+                Mock(returncode=0, stdout=""),
+                Mock(returncode=0, stdout="binary.py\n"),
+            ]
+        ),
+    )
+
+    assert main(["--json"]) == VIOLATIONS_FOUND
+
+    violation = json.loads(capsys.readouterr().out)["violations"][0]
+
+    assert violation["kind"] == "file"
+    assert "Could not read 'binary.py':" in violation["message"]
+    assert "invalid start byte" in violation["message"]
+
+
+def test_main_internal_error_reports_concise_diagnostic(tmp_path, monkeypatch, capsys):
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        "scrut.git.subprocess.run",
+        Mock(side_effect=[Mock(returncode=0, stdout="")]),
+    )
+    monkeypatch.setattr("scrut.cli.get_changed_files", Mock(side_effect=RuntimeError("boom")))
+
+    assert main([]) == ERROR
+
+    captured = capsys.readouterr()
+
+    assert captured.out == ""
+    assert "error: internal error: RuntimeError: boom" in captured.err
+    assert "Traceback" not in captured.err
+
+
+def test_main_internal_error_traceback_under_verbose(tmp_path, monkeypatch, capsys):
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        "scrut.git.subprocess.run",
+        Mock(side_effect=[Mock(returncode=0, stdout="")]),
+    )
+    monkeypatch.setattr("scrut.cli.get_changed_files", Mock(side_effect=RuntimeError("boom")))
+
+    assert main(["--verbose"]) == ERROR
+
+    captured = capsys.readouterr()
+
+    assert "error: internal error: RuntimeError: boom" in captured.err
+    assert "Traceback (most recent call last):" in captured.err
+
+
+def test_main_verbose_json_stdout_stays_clean(tmp_path, monkeypatch, capsys):
+
+    body = "".join(f"    if x{i}:\n        pass\n" for i in range(10))
+    (tmp_path / "bad.py").write_text("def f(x):\n" + body)
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        "scrut.git.subprocess.run",
+        Mock(
+            side_effect=[
+                Mock(returncode=0, stdout=""),
+                Mock(returncode=0, stdout="bad.py\n"),
+                Mock(returncode=0, stdout=""),
+            ]
+        ),
+    )
+
+    assert main(["--verbose", "--json"]) == VIOLATIONS_FOUND
+
+    captured = capsys.readouterr()
+
+    assert json.loads(captured.out)["summary"]["total"] == 1
+    assert "review set: bad.py" in captured.err
+
+
+def test_main_verbose_reports_ignore_paths_and_skips(tmp_path, monkeypatch, capsys):
+
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "app.py").write_text("def ok():\n    pass\n")
+    (tmp_path / "tests" / "bad.py").write_text("def ok():\n    pass\n")
+    (tmp_path / "notes.txt").write_text("x\n")
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        "scrut.git.subprocess.run",
+        Mock(
+            side_effect=[
+                Mock(returncode=0, stdout=""),
+                Mock(returncode=0, stdout="app.py\ntests/bad.py\nnotes.txt\n"),
+                Mock(returncode=0, stdout=""),
+            ]
+        ),
+    )
+
+    assert main(["--verbose", "--ignore-path", "tests"]) == SUCCESS
+
+    captured = capsys.readouterr()
+
+    assert "ignore paths: tests" in captured.err
+    assert "skipped 2 non-reviewable file(s): tests/bad.py, notes.txt" in captured.err
+
+
+def test_main_changed_non_utf8_file_does_not_crash(tmp_path, monkeypatch, capsys):
+
+    def git(*args):
+        subprocess.run(["git", *args], cwd=tmp_path, check=True, capture_output=True)
+
+    git("init", "-q")
+    git("config", "user.email", "test@example.com")
+    git("config", "user.name", "Test")
+
+    (tmp_path / "ok.py").write_text("def ok():\n    pass\n")
+    (tmp_path / "weird.py").write_bytes(b"x = 1\n")
+    git("add", "-A")
+    git("-c", "commit.gpgsign=false", "commit", "-q", "-m", "initial")
+
+    (tmp_path / "weird.py").write_bytes(b"\xff\xfe\xfa")
+    (tmp_path / "ok.py").write_text("def ok():\n    return 1\n")
+
+    monkeypatch.chdir(tmp_path)
+
+    assert main(["--changed"]) == VIOLATIONS_FOUND
+
+    assert "weird.py" in capsys.readouterr().out

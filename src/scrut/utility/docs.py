@@ -33,7 +33,8 @@ Git repository -> changed .py files -> ast.parse -> rules -> findings
    - keep paths that are existing .py files, not generated files
      (src/scrut/utility/is_generated.py), and not covered by ignore
      paths (src/scrut/utility/is_ignored.py).
-   If nothing remains, print "nothing to review" to stderr and exit 2.
+   If nothing remains, print "error: nothing to review" to stderr and
+   exit 2.
 4. Parse each reviewable file with ast.parse and walk the tree once
    (src/scrut/analyzer.py). A file that cannot be read or parsed
    becomes an ERROR finding; the rest of the review continues.
@@ -324,7 +325,7 @@ EXAMPLES
 
     # no changed Python files
     scrut
-    nothing to review
+    error: nothing to review
     hint: change or stage .py files, or use --all-files   (exit 2)
 
     # a clean run

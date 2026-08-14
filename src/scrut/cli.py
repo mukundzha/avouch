@@ -1,5 +1,6 @@
 import argparse
 import sys
+import traceback
 from pathlib import Path
 
 from scrut.config.loader import DEFAULT_RULES, load_config
@@ -15,6 +16,19 @@ ERROR = 2
 
 
 def main(argv=None):
+
+    verbose = "--verbose" in (argv if argv is not None else sys.argv[1:])
+
+    try:
+        return _main(argv)
+    except Exception as exc:
+        print(f"error: internal error: {type(exc).__name__}: {exc}", file=sys.stderr)
+        if verbose:
+            traceback.print_exc()
+        return ERROR
+
+
+def _main(argv=None):
 
     parser = argparse.ArgumentParser(
         prog="scrut",
@@ -92,7 +106,8 @@ def main(argv=None):
     reviewable_files = get_reviewable_files(candidate_files, ignore_paths)
 
     if not reviewable_files:
-        print("nothing to review", file=sys.stderr)
+        vlog(args.verbose, f"candidate files: {len(candidate_files)}, reviewable: 0")
+        print("error: nothing to review", file=sys.stderr)
         print("hint: change or stage .py files, or use --all-files", file=sys.stderr)
         return ERROR
 
@@ -101,6 +116,8 @@ def main(argv=None):
         f"config: {'scrut.toml' if Path('scrut.toml').exists() else 'defaults (no scrut.toml)'}, "
         f"{len(ignore_paths)} ignore path(s)",
     )
+    if args.verbose and ignore_paths:
+        vlog(True, f"ignore paths: {', '.join(ignore_paths)}")
     if args.all_files:
         vlog(args.verbose, "review mode: all repository files (git ls-files)")
         vlog(
@@ -132,6 +149,16 @@ def main(argv=None):
             names += ", ..."
 
         vlog(True, f"review set: {names}")
+
+        skipped = [file for file in candidate_files if file not in reviewable_files]
+
+        if skipped:
+            names = ", ".join(skipped[:10])
+
+            if len(skipped) > 10:
+                names += ", ..."
+
+            vlog(True, f"skipped {len(skipped)} non-reviewable file(s): {names}")
 
     file_reports = []
     functions_reports = []

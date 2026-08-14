@@ -21,33 +21,35 @@ import ast
 
 def read_file(file_path):
 
-    try:
-        with open(file_path, "r", encoding="utf-8") as file:
-            return file.read()
-    except OSError:
-        return None
+    with open(file_path, "r", encoding="utf-8") as file:
+        return file.read()
 
 
 def analyze_file(file_path, limits, rules):
 
-    source_code = read_file(file_path)
-
-    if source_code is None:
+    try:
+        source_code = read_file(file_path)
+    except (OSError, UnicodeDecodeError) as exc:
         return (
             [],
             [
                 {
                     "name": file_path,
                     "lines": 0,
-                    "issues": [{"severity": "ERROR", "message": "Could not read file"}],
+                    "issues": [
+                        {
+                            "severity": "ERROR",
+                            "message": f"Could not read '{file_path}': {getattr(exc, 'strerror', None) or exc}.",
+                        }
+                    ],
                 }
             ],
             [],
         )
-
     try:
         parsed = ast.parse(source_code)
     except SyntaxError as exc:
+        location = f" at line {exc.lineno}" if exc.lineno else ""
         return (
             [],
             [
@@ -55,7 +57,12 @@ def analyze_file(file_path, limits, rules):
                     "name": file_path,
                     "lines": 0,
                     "line": exc.lineno,
-                    "issues": [{"severity": "ERROR", "message": "Python syntax error"}],
+                    "issues": [
+                        {
+                            "severity": "ERROR",
+                            "message": f"Could not parse '{file_path}': {exc.msg}{location}.",
+                        }
+                    ],
                 }
             ],
             [],

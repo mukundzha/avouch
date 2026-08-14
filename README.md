@@ -172,7 +172,7 @@ hint: run Scrut from inside a Git repository
 
 $ cd ~/repo-with-no-python-changes
 $ scrut
-nothing to review
+error: nothing to review
 hint: change or stage .py files, or use --all-files
 ```
 

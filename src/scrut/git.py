@@ -37,7 +37,10 @@ def get_file_diff(file_path):
         return None
 
     result = subprocess.run(
-        ["git", "diff", "HEAD", "--", file_path], capture_output=True, text=True
+        ["git", "diff", "HEAD", "--", file_path],
+        capture_output=True,
+        text=True,
+        errors="replace",
     )
 
     return result.stdout
