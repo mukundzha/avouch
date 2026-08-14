@@ -346,20 +346,13 @@ Runtime: Python standard library (ast, tomllib) plus three git
 Docs of record: README.md at the repository root.
 """
 
-HELP = """\
-Scrut interactive documentation browser
-=======================================
-any key          next page
-q / Q            quit --docs
-h / H            this help screen
-o / O            command-line options (USAGE section)
-p / P            print the full documentation, then keep browsing
-g / G            go to a section by number or name
-m / M            return to the main screen
-Ctrl-C           leave at any time
-"""
+MENU = "H)elp  O)ptions  P)rint  G)o  M)ain  Q)uit"
 
-MENU = "  H)elp  O)ptions  P)rint  G)o  M)ain screen  Q)uit"
+
+def _hint_box(text):
+    inner = f" {text} "
+    edge = "─" * len(inner)
+    return f"┌{edge}┐\r\n│{inner}│\r\n└{edge}┘\r\n"
 
 
 def render_docs():
@@ -410,19 +403,26 @@ def _doc_page(start, end, label, spans):
 
 def _page(lines, start, end, label, spans):
     width, height = shutil.get_terminal_size((80, 24))
-    body = max(height - 2, 6)
+    body = max(height - 3, 5)
     pos = start
+    hint = False
     while True:
         _clear(width)
-        for line in lines[pos:pos + body]:
+        current = (pos - start) // body + 1
+        total = max((end - start + body - 1) // body, 1)
+        sys.stdout.write(f"{label} · page {current} of {total}\r\n")
+        shown = body - 3 if hint else body
+        for line in lines[pos:pos + shown]:
             sys.stdout.write(line + "\r\n")
-        _footer(width, label, start, end, pos, body)
+        if hint:
+            sys.stdout.write(_hint_box("press space to scroll down"))
+        _footer(width)
         key = sys.stdin.read(1)
         if key in "qQ" or key == "":
             return "quit"
         if key in "hH":
-            _page(HELP.splitlines(), 0, len(HELP.splitlines()), "help", spans)
-            return
+            hint = True
+            continue
         if key in "oO":
             section = _find_span(spans, "USAGE")
             if section:
@@ -442,6 +442,7 @@ def _page(lines, start, end, label, spans):
         if key in "mM":
             return
         pos += body
+        hint = False
         if pos >= end:
             return
 
@@ -498,12 +499,13 @@ def _read_line():
 
 
 def _clear(width):
-    sys.stdout.write("\r\033[2J\033[H")
+    sys.stdout.write("\r\033[H\033[J")
     sys.stdout.flush()
 
 
-def _footer(width, label, start, end, pos, body):
-    first = pos - start + 1
-    last = min(pos + body, end) - start
-    line = f" {label}  lines {first}-{last}/{end - start} " + MENU
-    sys.stdout.write(line[:width] + "\r\n")
+def _footer(width):
+    sys.stdout.write("─" * min(width, 80) + "\r\n")
+    menu = MENU
+    if len(menu) > width:
+        menu = " ".join(menu.split())
+    sys.stdout.write(menu[:width] + "\r\n")
