@@ -346,7 +346,7 @@ Runtime: Python standard library (ast, tomllib) plus three git
 Docs of record: README.md at the repository root.
 """
 
-MENU = "H)elp  O)ptions  P)rint  G)o  M)ain  Q)uit"
+MENU = "H)elp  G)o  M)ain  Q)uit"
 
 
 def _hint_box(text):
@@ -423,17 +423,6 @@ def _page(lines, start, end, label, spans):
         if key in "hH":
             hint = True
             continue
-        if key in "oO":
-            section = _find_span(spans, "USAGE")
-            if section:
-                _doc_page(section[1], section[2], section[0].lower(), spans)
-            return
-        if key in "pP":
-            sys.stdout.write(DOCS + "\r\n")
-            sys.stdout.write("\r\n-- printed above -- any key returns to the browser\r\n")
-            sys.stdout.flush()
-            sys.stdin.read(1)
-            return
         if key in "gG":
             target = _go_prompt(spans, width, height)
             if target is not None:
@@ -445,14 +434,6 @@ def _page(lines, start, end, label, spans):
         hint = False
         if pos >= end:
             return
-
-
-def _find_span(spans, name):
-    want = name.lower()
-    for span in spans:
-        if span[0].lower() == want:
-            return span
-    return None
 
 
 def _go_prompt(spans, width, height):

@@ -189,8 +189,8 @@ what Scrut does, the Git-aware workflow, every rule with its scope, every
 configuration key with its default, both output formats, and realistic
 examples — then exits `0` without running a review. It works anywhere,
 even outside a Git repository. In a real terminal it opens as an
-interactive browser (`H`elp, `O`ptions, `P`rint, `G`o, `M`ain screen,
-`Q`uit); when stdout is piped it prints the plain text instead.
+interactive browser (`H`elp, `G`o, `M`ain screen, `Q`uit); when stdout
+is piped it prints the plain text instead.
 
 ---
 
