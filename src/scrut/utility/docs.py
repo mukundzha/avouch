@@ -4,6 +4,9 @@ Terminal documentation rendered by `scrut --docs`.
 Every statement here describes behavior implemented in this repository.
 """
 
+import shutil
+import sys
+
 DOCS = """\
 SCRUT - Git-aware AST code review for the Python you changed
 ===========================================================
@@ -342,3 +345,165 @@ Runtime: Python standard library (ast, tomllib) plus three git
          the current code does not import.
 Docs of record: README.md at the repository root.
 """
+
+HELP = """\
+Scrut interactive documentation browser
+=======================================
+any key          next page
+q / Q            quit --docs
+h / H            this help screen
+o / O            command-line options (USAGE section)
+p / P            print the full documentation, then keep browsing
+g / G            go to a section by number or name
+m / M            return to the main screen
+Ctrl-C           leave at any time
+"""
+
+MENU = "  H)elp  O)ptions  P)rint  G)o  M)ain screen  Q)uit"
+
+
+def render_docs():
+    """Show the built-in documentation; interactive in a real terminal."""
+    if not (sys.stdin.isatty() and sys.stdout.isatty()):
+        print(DOCS)
+        return
+    try:
+        import termios
+        import tty
+    except ImportError:
+        print(DOCS)
+        return
+    fd = sys.stdin.fileno()
+    saved = termios.tcgetattr(fd)
+    try:
+        tty.setcbreak(fd)
+        _browse()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, saved)
+
+
+def _browse():
+    doc_lines, spans = _section_spans()
+    while _doc_page(0, len(doc_lines), "main screen", spans) != "quit":
+        pass
+
+
+def _section_spans():
+    lines = DOCS.splitlines()
+    starts = []
+    for i in range(len(lines) - 1):
+        nxt = lines[i + 1]
+        if nxt and set(nxt) <= set("=-") and any(c.isalpha() for c in lines[i]):
+            starts.append(i)
+    spans = []
+    for k, start in enumerate(starts):
+        end = starts[k + 1] if k + 1 < len(starts) else len(lines)
+        spans.append((lines[start].strip(), start, end))
+    return lines, spans
+
+
+def _doc_page(start, end, label, spans):
+    return _page(DOCS.splitlines(), start, end, label, spans)
+
+
+def _page(lines, start, end, label, spans):
+    width, height = shutil.get_terminal_size((80, 24))
+    body = max(height - 2, 6)
+    pos = start
+    while True:
+        _clear(width)
+        for line in lines[pos:pos + body]:
+            sys.stdout.write(line + "\r\n")
+        _footer(width, label, start, end, pos, body)
+        key = sys.stdin.read(1)
+        if key in "qQ" or key == "":
+            return "quit"
+        if key in "hH":
+            _page(HELP.splitlines(), 0, len(HELP.splitlines()), "help", spans)
+            return
+        if key in "oO":
+            section = _find_span(spans, "USAGE")
+            if section:
+                _doc_page(section[1], section[2], section[0].lower(), spans)
+            return
+        if key in "pP":
+            sys.stdout.write(DOCS + "\r\n")
+            sys.stdout.write("\r\n-- printed above -- any key returns to the browser\r\n")
+            sys.stdout.flush()
+            sys.stdin.read(1)
+            return
+        if key in "gG":
+            target = _go_prompt(spans, width, height)
+            if target is not None:
+                _doc_page(target[1], target[2], target[0].lower(), spans)
+            return
+        if key in "mM":
+            return
+        pos += body
+        if pos >= end:
+            return
+
+
+def _find_span(spans, name):
+    want = name.lower()
+    for span in spans:
+        if span[0].lower() == want:
+            return span
+    return None
+
+
+def _go_prompt(spans, width, height):
+    _clear(width)
+    sys.stdout.write("Sections\r\n========\r\n")
+    for i, (name, _, _) in enumerate(spans, 1):
+        sys.stdout.write(f"{i:>2}. {name}\r\n")
+    sys.stdout.write("Go to (number or name): ")
+    sys.stdout.flush()
+    answer = _read_line()
+    if not answer:
+        return None
+    if answer.isdigit():
+        try:
+            return spans[int(answer) - 1]
+        except IndexError:
+            return None
+    want = answer.lower()
+    for span in spans:
+        if span[0].lower().startswith(want):
+            return span
+    return None
+
+
+def _read_line():
+    chars = []
+    while True:
+        ch = sys.stdin.read(1)
+        if ch in ("\r", "\n"):
+            sys.stdout.write("\r\n")
+            sys.stdout.flush()
+            return "".join(chars)
+        if ch in ("\x7f", "\b"):
+            if chars:
+                chars.pop()
+                sys.stdout.write("\b \b")
+                sys.stdout.flush()
+            continue
+        if ch in ("", "\x04"):
+            return "".join(chars)
+        chars.append(ch)
+        sys.stdout.write(ch)
+        sys.stdout.flush()
+
+
+def _clear(width):
+    sys.stdout.write("\r\033[2J\033[H")
+    sys.stdout.flush()
+
+
+def _footer(width, label, start, end, pos, body):
+    first = pos - start + 1
+    last = min(pos + body, end) - start
+    line = f" {label}  lines {first}-{last}/{end - start} " + MENU
+    sys.stdout.write(line[:width] + "\r\n")

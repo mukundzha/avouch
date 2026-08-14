@@ -188,7 +188,9 @@ when findings are reported, and `2` when Scrut cannot run.
 what Scrut does, the Git-aware workflow, every rule with its scope, every
 configuration key with its default, both output formats, and realistic
 examples — then exits `0` without running a review. It works anywhere,
-even outside a Git repository.
+even outside a Git repository. In a real terminal it opens as an
+interactive browser (`H`elp, `O`ptions, `P`rint, `G`o, `M`ain screen,
+`Q`uit); when stdout is piped it prints the plain text instead.
 
 ---
 
@@ -730,8 +732,10 @@ flowchart LR
    and renders the `scrut [Review Summary]` box, `[NEEDS REVIEW]`
    component tables, and the `[PASSING]` grid.
 
-`cli.py` with `--docs` short-circuits before config loading and prints
-`docs.DOCS`, so no Git or analysis code runs.
+`cli.py` with `--docs` short-circuits before config loading and calls
+`docs.render_docs()`, so no Git or analysis code runs. In a TTY that
+renders an interactive browser over `docs.DOCS`; piped stdout prints
+the plain text.
 
 ### Reporting details
 
