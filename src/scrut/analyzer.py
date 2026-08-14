@@ -156,7 +156,6 @@ def analyze_file(file_path, limits, rules):
 
             if rules["max_class_lines"]:
                 issues.extend(analyze_max_class_lines(node, limits))
-
             if rules["max_complexity"] and complexity > limits["max_complexity"]:
                 issues.append(
                     {
