@@ -411,9 +411,13 @@ def _render_finding(finding, source_lines):
     print(" " * width + " │")
 
 
+def _most_common_first(counts, key):
+    return (-counts[key], key)
+
+
 def _render_rule_summary(rule_counts, rule_labels):
 
-    ordered = sorted(rule_counts, key=lambda key: (-rule_counts[key], key))
+    ordered = sorted(rule_counts, key=lambda key: _most_common_first(rule_counts, key))
 
     plain = []
 

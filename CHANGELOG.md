@@ -42,6 +42,10 @@ The format is inspired by Keep a Changelog.
   and test counts now match the shipped behavior.
 - Default limits relaxed to match `scrut.toml` so whole-repo CI checks
   pass on the repository itself.
+- The repository's own whole-repo scan is clean: node-dispatch logic was
+  extracted out of `analyze_file` (nesting deep enough to trip SCR013)
+  and the rule-summary sort uses a named key function instead of a
+  complex lambda (SCR008).
 
 ## [0.3.0]
 

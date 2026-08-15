@@ -27,177 +27,187 @@ def read_file(file_path):
         return file.read()
 
 
+def _read_and_parse(file_path):
+
+    try:
+        source = read_file(file_path)
+        parsed = ast.parse(source)
+    except (OSError, UnicodeDecodeError) as exc:
+        return None, None, [
+            {
+                "name": file_path,
+                "lines": 0,
+                "kind": "file",
+                "issues": [
+                    {
+                        "severity": "ERROR",
+                        "message": f"Could not read '{file_path}': {getattr(exc, 'strerror', None) or exc}.",
+                    }
+                ],
+            }
+        ]
+    except SyntaxError as exc:
+        location = f" at line {exc.lineno}" if exc.lineno else ""
+        return None, None, [
+            {
+                "name": file_path,
+                "lines": 0,
+                "line": exc.lineno,
+                "kind": "file",
+                "issues": [
+                    {
+                        "severity": "ERROR",
+                        "message": f"Could not parse '{file_path}': {exc.msg}{location}.",
+                    }
+                ],
+            }
+        ]
+    return parsed, source, []
+
+
+def _analyze_func(node, file_path, limits, rules):
+
+    issues = []
+    line_count = node.end_lineno - node.lineno + 1
+    param_count = len(node.args.args)
+
+    if rules["max_function_lines"]:
+        issues.extend(analyze_max_function_lines(node, limits))
+
+    if rules["max_complexity"]:
+        complexity = calculate_complexity(node)
+
+        if complexity > limits["max_complexity"]:
+            issues.append(
+                {
+                    "severity": "WARNING",
+                    "message": f"Function too complex ({complexity}/{limits['max_complexity']}). Reduce branching or extract nested logic into separate functions.",
+                }
+            )
+
+    if rules["max_boolean_conditions"]:
+        issues.extend(analyze_boolean_complexity(node, limits))
+
+    if rules["max_parameters"]:
+        issues.extend(analyze_max_parameters(node, limits))
+
+    if rules["empty_except"]:
+        issues.extend(analyze_empty_except(node, limits))
+    if rules["max_if_else_chain"]:
+        issues.extend(analyze_if_else_chain(node, limits))
+    if rules["max_lambda_nodes"]:
+        issues.extend(analyze_large_lambda(node, limits))
+    if rules["max_local_variables"]:
+        issues.extend(analyze_local_variables(node, limits))
+    if rules["max_nesting"]:
+        issues.extend(analyze_max_nesting(node, limits))
+    if rules["bare_except"]:
+        issues.extend(analyze_bare_except(node, limits))
+
+    report = {
+        "name": node.name,
+        "file": file_path,
+        "line": node.lineno,
+        "lines": line_count,
+        "parameters": param_count,
+        "kind": "func",
+        "issues": issues,
+    }
+
+    if rules["detect_duplicateb"]:
+        issues.extend(analyze_duplicateb(node, limits))
+    if rules["max_large_comprehensions"]:
+        issues.extend(analyze_large_comprehensions(node, limits))
+    if rules["nested_function"]:
+        issues.extend(analyze_nested_function(node, limits))
+    if rules["max_return_statements"]:
+        issues.extend(analyze_return_statements(node, limits))
+
+    return report
+
+
+def _analyze_async(node, file_path, limits, rules):
+
+    issues = []
+
+    if rules["async_without_await"]:
+        issues.extend(analyze_async_without_await(node, limits))
+
+    return {
+        "name": node.name,
+        "file": file_path,
+        "line": node.lineno,
+        "lines": node.end_lineno - node.lineno + 1,
+        "parameters": len(node.args.args),
+        "kind": "func",
+        "issues": issues,
+    }
+
+
+def _analyze_class(node, file_path, limits, rules):
+
+    issues = []
+
+    if rules["max_class_lines"]:
+        issues.extend(analyze_max_class_lines(node, limits))
+    if rules["max_complexity"]:
+        complexity = calculate_complexity(node)
+
+        if complexity > limits["max_complexity"]:
+            issues.append(
+                {
+                    "severity": "WARNING",
+                    "message": f"Class too complex ({complexity}/{limits['max_complexity']}). Decompose into focused classes or extract complex methods.",
+                }
+            )
+
+    if rules["max_boolean_conditions"]:
+        issues.extend(analyze_boolean_complexity(node, limits))
+    if rules["max_if_else_chain"]:
+        issues.extend(analyze_if_else_chain(node, limits))
+
+    report = {
+        "name": node.name,
+        "file": file_path,
+        "line": node.lineno,
+        "lines": node.end_lineno - node.lineno + 1,
+        "kind": "class",
+        "issues": issues,
+    }
+
+    if rules["empty_except"]:
+        issues.extend(analyze_empty_except(node, limits))
+
+    return report
+
+
 def analyze_file(file_path, limits, rules):
 
     reset_walk_cache()
 
-    try:
-        source_code = read_file(file_path)
-    except (OSError, UnicodeDecodeError) as exc:
-        return (
-            [],
-            [
-                {
-                    "name": file_path,
-                    "lines": 0,
-                    "kind": "file",
-                    "issues": [
-                        {
-                            "severity": "ERROR",
-                            "message": f"Could not read '{file_path}': {getattr(exc, 'strerror', None) or exc}.",
-                        }
-                    ],
-                }
-            ],
-            [],
-        )
-    try:
-        parsed = ast.parse(source_code)
-    except SyntaxError as exc:
-        location = f" at line {exc.lineno}" if exc.lineno else ""
-        return (
-            [],
-            [
-                {
-                    "name": file_path,
-                    "lines": 0,
-                    "line": exc.lineno,
-                    "kind": "file",
-                    "issues": [
-                        {
-                            "severity": "ERROR",
-                            "message": f"Could not parse '{file_path}': {exc.msg}{location}.",
-                        }
-                    ],
-                }
-            ],
-            [],
-        )
+    parsed, source, error_report = _read_and_parse(file_path)
+
+    if parsed is None:
+        return ([], error_report, [])
 
     funcs = []
     cls = []
 
     for node in ast.walk(parsed):
         if isinstance(node, ast.FunctionDef):
-
-            issues = []
-            line_count = node.end_lineno - node.lineno + 1
-            param_count = len(node.args.args)
-
-            if rules["max_function_lines"]:
-                issues.extend(analyze_max_function_lines(node, limits))
-
-            if rules["max_complexity"]:
-                complexity = calculate_complexity(node)
-
-                if complexity > limits["max_complexity"]:
-                    issues.append(
-                        {
-                            "severity": "WARNING",
-                            "message": f"Function too complex ({complexity}/{limits['max_complexity']}). Reduce branching or extract nested logic into separate functions.",
-                        }
-                    )
-
-            if rules["max_boolean_conditions"]:
-                issues.extend(analyze_boolean_complexity(node, limits))
-
-            if rules["max_parameters"]:
-                issues.extend(analyze_max_parameters(node, limits))
-
-            if rules["empty_except"]:
-                issues.extend(analyze_empty_except(node, limits))
-            if rules["max_if_else_chain"]:
-                issues.extend(analyze_if_else_chain(node, limits))
-            if rules["max_lambda_nodes"]:
-                issues.extend(analyze_large_lambda(node, limits))
-            if rules["max_local_variables"]:
-                issues.extend(analyze_local_variables(node, limits))
-            if rules["max_nesting"]:
-                issues.extend(analyze_max_nesting(node, limits))
-            if rules["bare_except"]:
-                issues.extend(analyze_bare_except(node, limits))
-
-            funcs.append(
-                {
-                    "name": node.name,
-                    "file": file_path,
-                    "line": node.lineno,
-                    "lines": line_count,
-                    "parameters": param_count,
-                    "kind": "func",
-                    "issues": issues,
-                }
-            )
-
-            if rules["detect_duplicateb"]:
-                issues.extend(analyze_duplicateb(node, limits))
-            if rules["max_large_comprehensions"]:
-                issues.extend(analyze_large_comprehensions(node, limits))
-            if rules["nested_function"]:
-                issues.extend(analyze_nested_function(node, limits))
-            if rules["max_return_statements"]:
-                issues.extend(analyze_return_statements(node, limits))
-
+            funcs.append(_analyze_func(node, file_path, limits, rules))
         elif isinstance(node, ast.AsyncFunctionDef):
-
-            issues = []
-
-            if rules["async_without_await"]:
-                issues.extend(analyze_async_without_await(node, limits))
-
-            funcs.append(
-                {
-                    "name": node.name,
-                    "file": file_path,
-                    "line": node.lineno,
-                    "lines": node.end_lineno - node.lineno + 1,
-                    "parameters": len(node.args.args),
-                    "kind": "func",
-                    "issues": issues,
-                }
-            )
-
+            funcs.append(_analyze_async(node, file_path, limits, rules))
         elif isinstance(node, ast.ClassDef):
-            issues = []
-
-            if rules["max_class_lines"]:
-                issues.extend(analyze_max_class_lines(node, limits))
-            if rules["max_complexity"]:
-                complexity = calculate_complexity(node)
-
-                if complexity > limits["max_complexity"]:
-                    issues.append(
-                        {
-                            "severity": "WARNING",
-                            "message": f"Class too complex ({complexity}/{limits['max_complexity']}). Decompose into focused classes or extract complex methods.",
-                        }
-                    )
-
-            if rules["max_boolean_conditions"]:
-                issues.extend(analyze_boolean_complexity(node, limits))
-            if rules["max_if_else_chain"]:
-                issues.extend(analyze_if_else_chain(node, limits))
-            cls.append(
-                {
-                    "name": node.name,
-                    "file": file_path,
-                    "line": node.lineno,
-                    "lines": node.end_lineno - node.lineno + 1,
-                    "kind": "class",
-                    "issues": issues,
-                }
-            )
-
-            if rules["empty_except"]:
-                issues.extend(analyze_empty_except(node, limits))
+            cls.append(_analyze_class(node, file_path, limits, rules))
 
     file_issues = []
 
     if rules["max_file_lines"]:
-        file_issues = analyze_max_file_lines(source_code, limits)
+        file_issues = analyze_max_file_lines(source, limits)
 
     return (
         funcs,
-        [{"name": file_path, "lines": len(source_code.splitlines()), "kind": "file", "issues": file_issues}],
+        [{"name": file_path, "lines": len(source.splitlines()), "kind": "file", "issues": file_issues}],
         cls,
     )
