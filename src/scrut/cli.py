@@ -1,4 +1,5 @@
 import argparse
+import importlib.metadata
 import sys
 import traceback
 from pathlib import Path
@@ -13,6 +14,20 @@ from scrut.git import is_gitrepo, get_changed_files, get_staged_files, get_all_f
 SUCCESS = 0
 VIOLATIONS_FOUND = 1
 ERROR = 2
+
+try:
+    SCRUT_VERSION = importlib.metadata.version("scrut")
+except importlib.metadata.PackageNotFoundError:
+    SCRUT_VERSION = "0.3.1"
+
+
+def _nothing_to_review_hint(args, candidate_files):
+
+    if args.not_git:
+        return "no reviewable .py files found on disk"
+    if not candidate_files and not args.staged:
+        return "nothing changed vs HEAD (CI checkouts are clean); use --all-files for a full review"
+    return "change or stage .py files, or use --all-files"
 
 
 def main(argv=None):
@@ -40,6 +55,12 @@ def _main(argv=None):
         ),
     )
     parser.add_argument("--docs", action="store_true", help="show built-in documentation and exit")
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"scrut {SCRUT_VERSION}",
+        help="print the Scrut version and exit",
+    )
     parser.add_argument("--json", action="store_true", help="print findings as JSON")
     parser.add_argument(
         "--ignore-path",
@@ -129,10 +150,7 @@ def _main(argv=None):
     if not reviewable_files:
         vlog(args.verbose, f"candidate files: {len(candidate_files)}, reviewable: 0")
         print("error: nothing to review", file=sys.stderr)
-        if args.not_git:
-            print("hint: no reviewable .py files found on disk", file=sys.stderr)
-        else:
-            print("hint: change or stage .py files, or use --all-files", file=sys.stderr)
+        print(f"hint: {_nothing_to_review_hint(args, candidate_files)}", file=sys.stderr)
         return ERROR
 
     vlog(

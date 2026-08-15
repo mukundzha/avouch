@@ -169,7 +169,7 @@ def test_main_verbose_quiet_when_nothing_to_review(tmp_path, monkeypatch, capsys
     assert captured.err == (
         "scrut: candidate files: 0, reviewable: 0\n"
         "error: nothing to review\n"
-        "hint: change or stage .py files, or use --all-files\n"
+        "hint: nothing changed vs HEAD (CI checkouts are clean); use --all-files for a full review\n"
     )
 
 
@@ -549,6 +549,15 @@ def test_main_help_lists_quiet(capsys):
         main(["--help"])
 
     assert "--quiet" in capsys.readouterr().out
+
+
+def test_main_version_prints_version(capsys):
+
+    with pytest.raises(SystemExit) as exc:
+        main(["--version"])
+
+    assert exc.value.code == 0
+    assert "scrut 0.3.1" in capsys.readouterr().out
 
 
 def _main_all_files(tmp_path, monkeypatch, stdout):

@@ -91,6 +91,7 @@ cd your-repo
 scrut            # human report
 scrut --json     # one JSON document on stdout
 scrut --docs     # built-in documentation; no review performed
+scrut --version  # print the version and exit
 scrut --verbose  # step-by-step review details on stderr
 scrut --quiet    # analyze, print no report; exit code only
 scrut --changed  # compact added/deleted view of changed files vs HEAD
@@ -174,10 +175,10 @@ $ scrut
 error: no Git repository found
 hint: run Scrut from inside a Git repository
 
-$ cd ~/repo-with-no-python-changes
+$ cd ~/fresh-checkout   # e.g. a CI runner
 $ scrut
 error: nothing to review
-hint: change or stage .py files, or use --all-files
+hint: nothing changed vs HEAD (CI checkouts are clean); use --all-files for a full review
 ```
 
 Colors are ANSI codes emitted only when stdout is a TTY. Piped output is
@@ -406,6 +407,7 @@ Setting a toggle to `false` disables that rule's findings. A one-line
 | `max_file_lines` | 1000 | SCR011 | Max file line count |
 | `max_complexity` | 40 | — | Max cyclomatic complexity |
 | `max_boolean_conditions` | 5 | SCR003 | Max operands in one chain |
+| `max_if_chain` | 5 | SCR007 | Max if/elif links in a chain |
 | `max_local_variables` | 30 | SCR009 | Max distinct assigned names |
 | `max_return_statements` | 6 | SCR016 | Max `return`s per function |
 | `max_lambda_nodes` | 10 | SCR008 | Max AST nodes in a lambda body |
@@ -413,13 +415,8 @@ Setting a toggle to `false` disables that rule's findings. A one-line
 
 Limits are applied by key. A rule whose limit key is absent from the
 merged config falls back to the limit hardcoded in its own module, so a
-partial `[limits]` never turns a rule off.
-
-One stored key is never read by a rule: SCR007 actually reads
-`max_if_chain` (default 5, not part of `DEFAULT_LIMITS`), while SCR005
-reads `max_large_comprehensions`. Tune the chain rule with
-`max_if_chain = N` and the comprehension rule with
-`max_large_comprehensions = N`.
+partial `[limits]` never turns a rule off. Every limit key in the table
+above lives in `DEFAULT_LIMITS` and can be tuned from `scrut.toml`.
 
 ### Ignoring paths
 

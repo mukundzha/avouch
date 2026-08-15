@@ -76,6 +76,7 @@ not by the command line.
 
     scrut --help        argparse help for every option
     scrut --docs        this documentation; exits without reviewing
+    scrut --version     print the version and exit
     scrut --verbose     step-by-step review details on stderr
     scrut --quiet       suppress the normal report; errors and exit codes are unchanged
     scrut --changed     show added/deleted lines of changed files instead of the report
@@ -113,17 +114,16 @@ tests/x.py but not tests.py. A "." ignores the whole repository.
     max_file_lines         1000    file line count (SCR011)
     max_complexity           40    cyclomatic complexity, funcs+classes
     max_boolean_conditions    5    operands in one and/or chain (SCR003)
+    max_if_chain              5    if/elif chain length (SCR007)
     max_local_variables      30    distinct assigned names (SCR009)
     max_return_statements     6    returns per function (SCR016)
     max_lambda_nodes         10    AST nodes in a lambda body (SCR008)
     max_large_comprehensions 40    AST nodes in a comprehension (SCR005)
 
 A rule whose limit key is missing falls back to a default hardcoded in
-its own module, so a partial [limits] never turns a rule off.
-
-Note: SCR007 (long if/elif chain) reads the key max_if_chain (not in
-DEFAULT_LIMITS; falls back to 5) and SCR005 reads
-max_large_comprehensions.
+its own module, so a partial [limits] never turns a rule off. Every
+limit key above is present in DEFAULT_LIMITS, so all of them are tunable
+from scrut.toml.
 
 [rules] toggles (all default true):
 
@@ -151,6 +151,7 @@ Example - the exact scrut.toml this repository lives by:
     max_file_lines = 1000
     max_complexity = 40
     max_boolean_conditions = 5
+    max_if_chain = 5
     max_local_variables = 30
     max_return_statements = 6
     max_lambda_nodes = 10
@@ -336,10 +337,10 @@ EXAMPLES
     error: no Git repository found
     hint: run Scrut from inside a Git repository   (exit 2)
 
-    # no changed Python files
+    # no changed Python files in a clean checkout (as in CI)
     scrut
     error: nothing to review
-    hint: change or stage .py files, or use --all-files   (exit 2)
+    hint: nothing changed vs HEAD (CI checkouts are clean); use --all-files for a full review   (exit 2)
 
     # a clean run
     scrut
