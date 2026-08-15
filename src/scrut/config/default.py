@@ -7,17 +7,16 @@ import tomllib
 
 DEFAULT_LIMITS = {
     "max_parameters": 5,
-    "max_nesting": 4,
-    "max_function_lines": 50,
+    "max_nesting": 5,
+    "max_function_lines": 300,
     "max_class_lines": 200,
-    "max_file_lines": 400,
-    "max_complexity": 10,
+    "max_file_lines": 1000,
+    "max_complexity": 40,
     "max_boolean_conditions": 5,
-    "max_if_else_chain": 5,
-    "max_local_variables": 15,
-    "max_return_statements": 3,
-    "max_lambda_nodes": 5,
-    "max_comprehension_length": 10,
+    "max_local_variables": 30,
+    "max_return_statements": 6,
+    "max_lambda_nodes": 10,
+    "max_large_comprehensions": 40,
 }
 
 

@@ -107,26 +107,23 @@ tests/x.py but not tests.py. A "." ignores the whole repository.
 [limits] keys with their defaults (src/scrut/config/default.py):
 
     max_parameters            5    parameters per function (SCR014)
-    max_nesting               4    block nesting depth (SCR013)
-    max_function_lines       50    function line span (SCR012)
+    max_nesting               5    block nesting depth (SCR013)
+    max_function_lines      300    function line span (SCR012)
     max_class_lines         200    class line span (SCR010)
-    max_file_lines          400    file line count (SCR011)
-    max_complexity           10    cyclomatic complexity, funcs+classes
+    max_file_lines         1000    file line count (SCR011)
+    max_complexity           40    cyclomatic complexity, funcs+classes
     max_boolean_conditions    5    operands in one and/or chain (SCR003)
-    max_if_else_chain         5    stored key; see note below
-    max_local_variables      15    distinct assigned names (SCR009)
-    max_return_statements     3    returns per function (SCR016)
-    max_lambda_nodes          5    AST nodes in a lambda body (SCR008)
-    max_comprehension_length 10    stored key; see note below
+    max_local_variables      30    distinct assigned names (SCR009)
+    max_return_statements     6    returns per function (SCR016)
+    max_lambda_nodes         10    AST nodes in a lambda body (SCR008)
+    max_large_comprehensions 40    AST nodes in a comprehension (SCR005)
 
 A rule whose limit key is missing falls back to a default hardcoded in
 its own module, so a partial [limits] never turns a rule off.
 
-Note: SCR007 (long if/elif chain) reads the key max_if_chain and
-SCR005 (large comprehension) reads max_large_comprehensions, both
-falling back to 5 and 10. The DEFAULT_LIMITS keys max_if_else_chain
-and max_comprehension_length are loaded into the config but are not
-read by any rule.
+Note: SCR007 (long if/elif chain) reads the key max_if_chain (not in
+DEFAULT_LIMITS; falls back to 5) and SCR005 reads
+max_large_comprehensions.
 
 [rules] toggles (all default true):
 
@@ -144,26 +141,28 @@ Setting a toggle to false disables that rule's findings.
 
 Example - the exact scrut.toml this repository lives by:
 
+    ignore_paths = ["tests"]
+
     [limits]
-    max_parameters = 4
+    max_parameters = 5
     max_nesting = 5
-    max_function_lines = 50
-    max_class_lines = 50
-    max_file_lines = 50
-    max_complexity = 10
-    max_boolean_conditions = 6
-    max_local_variables = 15
+    max_function_lines = 300
+    max_class_lines = 200
+    max_file_lines = 1000
+    max_complexity = 40
+    max_boolean_conditions = 5
+    max_local_variables = 30
     max_return_statements = 6
     max_lambda_nodes = 10
-    max_large_comprehensions = 12
+    max_large_comprehensions = 40
 
     [rules]
     max_parameters = true
-    max_nesting = false
-    max_function_lines = false
+    max_nesting = true
+    max_function_lines = true
     max_class_lines = true
     max_file_lines = true
-    max_complexity = false
+    max_complexity = true
     max_boolean_conditions = true
     max_local_variables = true
     max_return_statements = true

@@ -57,6 +57,7 @@ def test_main_ignores_path_in_real_git_repo(tmp_path, monkeypatch, capsys):
     git("-c", "commit.gpgsign=false", "commit", "-q", "-m", "initial")
 
     body = "".join(f"    if x{i}:\n        pass\n" for i in range(10))
+    _scrut_toml(tmp_path)
     (tmp_path / "app.py").write_text("def f(x):\n" + body)
     (tmp_path / "tests" / "bad.py").write_text("def t(x):\n" + body)
     git("add", "-A")
@@ -75,6 +76,7 @@ def test_main_ignores_path_in_real_git_repo(tmp_path, monkeypatch, capsys):
 def test_main_returns_1_on_violations(tmp_path, monkeypatch, capsys):
 
     body = "".join(f"    if x{i}:\n        pass\n" for i in range(10))
+    _scrut_toml(tmp_path)
     bad = tmp_path / "bad.py"
     bad.write_text("def f(x):\n" + body)
 
@@ -134,6 +136,11 @@ def _main_git(tmp_path, monkeypatch, stdout):
     )
 
 
+def _scrut_toml(tmp_path, extra=""):
+
+    (tmp_path / "scrut.toml").write_text(extra + "[limits]\nmax_complexity = 10\n")
+
+
 def test_main_verbose_reports_diagnostics(tmp_path, monkeypatch, capsys):
 
     (tmp_path / "a.py").write_text("def ok():\n    pass\n")
@@ -183,6 +190,7 @@ def test_main_verbose_keeps_normal_mode_quiet(tmp_path, monkeypatch, capsys):
 def test_main_verbose_findings_unchanged(tmp_path, monkeypatch, capsys):
 
     body = "".join(f"    if x{i}:\n        pass\n" for i in range(10))
+    _scrut_toml(tmp_path)
     (tmp_path / "bad.py").write_text("def f(x):\n" + body)
 
     monkeypatch.chdir(tmp_path)
@@ -213,6 +221,7 @@ def test_main_verbose_findings_unchanged(tmp_path, monkeypatch, capsys):
 def test_main_changed_reviews_same_files_as_default(tmp_path, monkeypatch, capsys):
 
     body = "".join(f"    if x{i}:\n        pass\n" for i in range(10))
+    _scrut_toml(tmp_path)
     (tmp_path / "bad.py").write_text("def f(x):\n" + body)
 
     monkeypatch.chdir(tmp_path)
@@ -410,6 +419,7 @@ def test_main_quiet_clean_suppresses_output(tmp_path, monkeypatch, capsys):
 def test_main_quiet_same_exit_code_as_normal(tmp_path, monkeypatch, capsys):
 
     body = "".join(f"    if x{i}:\n        pass\n" for i in range(10))
+    _scrut_toml(tmp_path)
     (tmp_path / "bad.py").write_text("def f(x):\n" + body)
 
     monkeypatch.chdir(tmp_path)
@@ -455,6 +465,7 @@ def test_main_quiet_error_outside_git_repo(mock_is_gitrepo, capsys):
 def test_main_quiet_json_still_valid(tmp_path, monkeypatch, capsys):
 
     body = "".join(f"    if x{i}:\n        pass\n" for i in range(10))
+    _scrut_toml(tmp_path)
     (tmp_path / "bad.py").write_text("def f(x):\n" + body)
 
     monkeypatch.chdir(tmp_path)
@@ -641,6 +652,7 @@ def test_main_json_clean(tmp_path, monkeypatch, capsys):
 def test_main_json_single_violation(tmp_path, monkeypatch, capsys):
 
     body = "".join(f"    if x{i}:\n        pass\n" for i in range(10))
+    _scrut_toml(tmp_path)
     (tmp_path / "bad.py").write_text("def f(x):\n" + body)
 
     assert _main_json(tmp_path, monkeypatch, "bad.py\n") == VIOLATIONS_FOUND
@@ -707,6 +719,7 @@ def test_main_json_error_exit_code(mock_is_gitrepo, capsys):
 def test_main_changed_json_is_machine_readable(tmp_path, monkeypatch, capsys):
 
     body = "".join(f"    if x{i}:\n        pass\n" for i in range(10))
+    _scrut_toml(tmp_path)
     (tmp_path / "bad.py").write_text("def f(x):\n" + body)
 
     monkeypatch.chdir(tmp_path)
@@ -733,6 +746,7 @@ def test_main_changed_json_is_machine_readable(tmp_path, monkeypatch, capsys):
 def test_main_staged_json_is_machine_readable(tmp_path, monkeypatch, capsys):
 
     body = "".join(f"    if x{i}:\n        pass\n" for i in range(10))
+    _scrut_toml(tmp_path)
     (tmp_path / "bad.py").write_text("def f(x):\n" + body)
 
     monkeypatch.chdir(tmp_path)
@@ -757,6 +771,7 @@ def test_main_staged_json_is_machine_readable(tmp_path, monkeypatch, capsys):
 def test_main_all_files_json_is_machine_readable(tmp_path, monkeypatch, capsys):
 
     body = "".join(f"    if x{i}:\n        pass\n" for i in range(10))
+    _scrut_toml(tmp_path)
     (tmp_path / "bad.py").write_text("def f(x):\n" + body)
 
     _main_all_files(tmp_path, monkeypatch, "bad.py\n")
@@ -772,6 +787,7 @@ def test_main_all_files_json_is_machine_readable(tmp_path, monkeypatch, capsys):
 def test_main_json_contract_fields(tmp_path, monkeypatch, capsys):
 
     body = "".join(f"    if x{i}:\n        pass\n" for i in range(10))
+    _scrut_toml(tmp_path)
     (tmp_path / "bad.py").write_text("def f(x):\n" + body)
 
     assert _main_json(tmp_path, monkeypatch, "bad.py\n") == VIOLATIONS_FOUND
@@ -812,6 +828,7 @@ def test_main_json_file_finding_line_is_null(tmp_path, monkeypatch, capsys):
 def test_main_json_deterministic(tmp_path, monkeypatch, capsys):
 
     body = "".join(f"    if x{i}:\n        pass\n" for i in range(10))
+    _scrut_toml(tmp_path)
     (tmp_path / "bad.py").write_text("def f(x):\n" + body)
 
     assert _main_json(tmp_path, monkeypatch, "bad.py\n") == VIOLATIONS_FOUND
@@ -935,6 +952,7 @@ def test_main_internal_error_traceback_under_verbose(tmp_path, monkeypatch, caps
 def test_main_verbose_json_stdout_stays_clean(tmp_path, monkeypatch, capsys):
 
     body = "".join(f"    if x{i}:\n        pass\n" for i in range(10))
+    _scrut_toml(tmp_path)
     (tmp_path / "bad.py").write_text("def f(x):\n" + body)
 
     monkeypatch.chdir(tmp_path)
@@ -1036,6 +1054,7 @@ def test_main_not_git_reviews_python_files_in_plain_directory(tmp_path, monkeypa
 def test_main_not_git_reports_findings(tmp_path, monkeypatch, capsys):
 
     body = "".join(f"    if x{i}:\n        pass\n" for i in range(10))
+    _scrut_toml(tmp_path)
     (tmp_path / "bad.py").write_text("def f(x):\n" + body)
 
     monkeypatch.chdir(tmp_path)
@@ -1062,6 +1081,7 @@ def test_main_not_git_discovers_nested_python_files(tmp_path, monkeypatch, capsy
 def test_main_not_git_skips_env_and_cache_directories(tmp_path, monkeypatch, capsys):
 
     body = "".join(f"    if x{i}:\n        pass\n" for i in range(10))
+    _scrut_toml(tmp_path)
     (tmp_path / ".venv").mkdir()
     (tmp_path / ".venv" / "lib.py").write_text("def f(x):\n" + body)
     (tmp_path / "__pycache__").mkdir()
@@ -1084,6 +1104,7 @@ def test_main_not_git_skips_env_and_cache_directories(tmp_path, monkeypatch, cap
 def test_main_not_git_respects_ignore_path_flag(tmp_path, monkeypatch, capsys):
 
     body = "".join(f"    if x{i}:\n        pass\n" for i in range(10))
+    _scrut_toml(tmp_path)
     (tmp_path / "tests").mkdir()
     (tmp_path / "app.py").write_text("def f(x):\n" + body)
     (tmp_path / "tests" / "bad.py").write_text("def f(x):\n" + body)
@@ -1100,7 +1121,7 @@ def test_main_not_git_respects_ignore_path_flag(tmp_path, monkeypatch, capsys):
 
 def test_main_not_git_respects_config_ignore_paths(tmp_path, monkeypatch, capsys):
 
-    (tmp_path / "scrut.toml").write_text('ignore_paths = ["tests"]\n')
+    _scrut_toml(tmp_path, 'ignore_paths = ["tests"]\n')
     body = "".join(f"    if x{i}:\n        pass\n" for i in range(10))
     (tmp_path / "tests").mkdir()
     (tmp_path / "app.py").write_text("def f(x):\n" + body)
@@ -1119,6 +1140,7 @@ def test_main_not_git_respects_config_ignore_paths(tmp_path, monkeypatch, capsys
 def test_main_not_git_json_uses_existing_schema(tmp_path, monkeypatch, capsys):
 
     body = "".join(f"    if x{i}:\n        pass\n" for i in range(10))
+    _scrut_toml(tmp_path)
     (tmp_path / "bad.py").write_text("def f(x):\n" + body)
     (tmp_path / "good.py").write_text("def ok():\n    pass\n")
 

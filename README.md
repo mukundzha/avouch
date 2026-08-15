@@ -400,26 +400,24 @@ Setting a toggle to `false` disables that rule's findings. A one-line
 | Key | Default | Rule | Meaning |
 |-----|---------|------|---------|
 | `max_parameters` | 5 | SCR014 | Max positional + keyword params |
-| `max_nesting` | 4 | SCR013 | Max block nesting depth |
-| `max_function_lines` | 50 | SCR012 | Max function line span |
+| `max_nesting` | 5 | SCR013 | Max block nesting depth |
+| `max_function_lines` | 300 | SCR012 | Max function line span |
 | `max_class_lines` | 200 | SCR010 | Max class line span |
-| `max_file_lines` | 400 | SCR011 | Max file line count |
-| `max_complexity` | 10 | — | Max cyclomatic complexity |
+| `max_file_lines` | 1000 | SCR011 | Max file line count |
+| `max_complexity` | 40 | — | Max cyclomatic complexity |
 | `max_boolean_conditions` | 5 | SCR003 | Max operands in one chain |
-| `max_if_else_chain` | 5 | — | stored key, not read (see below) |
-| `max_local_variables` | 15 | SCR009 | Max distinct assigned names |
-| `max_return_statements` | 3 | SCR016 | Max `return`s per function |
-| `max_lambda_nodes` | 5 | SCR008 | Max AST nodes in a lambda body |
-| `max_large_comprehensions` | 10 | SCR005 | Max AST nodes in a comprehension |
+| `max_local_variables` | 30 | SCR009 | Max distinct assigned names |
+| `max_return_statements` | 6 | SCR016 | Max `return`s per function |
+| `max_lambda_nodes` | 10 | SCR008 | Max AST nodes in a lambda body |
+| `max_large_comprehensions` | 40 | SCR005 | Max AST nodes in a comprehension |
 
 Limits are applied by key. A rule whose limit key is absent from the
 merged config falls back to the limit hardcoded in its own module, so a
 partial `[limits]` never turns a rule off.
 
-Two of the stored keys are never read by a rule: SCR007 actually reads
-`max_if_chain` (default 5) and SCR005 reads `max_large_comprehensions`
-(default 10), while `max_if_else_chain` and `max_comprehension_length`
-in `DEFAULT_LIMITS` do not affect analysis. Tune the chain rule with
+One stored key is never read by a rule: SCR007 actually reads
+`max_if_chain` (default 5, not part of `DEFAULT_LIMITS`), while SCR005
+reads `max_large_comprehensions`. Tune the chain rule with
 `max_if_chain = N` and the comprehension rule with
 `max_large_comprehensions = N`.
 
