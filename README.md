@@ -96,11 +96,15 @@ scrut --quiet    # analyze, print no report; exit code only
 scrut --changed  # compact added/deleted view of changed files vs HEAD
 scrut --staged   # review only files staged for the next commit
 scrut --all-files  # review every eligible Python file, not just the diff
+scrut --not-git  # review every eligible .py file on disk; no Git repo needed
 scrut --help     # every flag
 ```
 
 The review set is defined by Git, so there is nothing to configure at
-invocation time. Scrut reviews:
+invocation time. With `--not-git`, Scrut skips the Git requirement and
+reviews every eligible `.py` file found by walking the current
+directory instead (skipping Git, cache, and virtual-environment
+directories). Scrut reviews:
 
 - tracked files modified vs. `HEAD` (`git diff HEAD --name-only`), and
 - untracked `.py` files (`git ls-files --others --exclude-standard`).

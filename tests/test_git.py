@@ -1006,3 +1006,243 @@ def test_main_changed_non_utf8_file_does_not_crash(tmp_path, monkeypatch, capsys
     assert main(["--changed"]) == VIOLATIONS_FOUND
 
     assert "weird.py" in capsys.readouterr().out
+
+
+def test_main_without_not_git_still_requires_git(tmp_path, monkeypatch, capsys):
+
+    (tmp_path / "a.py").write_text("def ok():\n    pass\n")
+
+    monkeypatch.chdir(tmp_path)
+
+    assert main([]) == ERROR
+    assert "no Git repository found" in capsys.readouterr().err
+
+
+def test_main_not_git_reviews_python_files_in_plain_directory(tmp_path, monkeypatch, capsys):
+
+    (tmp_path / "good.py").write_text("def f(a, b, c, d, e, f):\n    return a\n")
+    (tmp_path / "notes.txt").write_text("not python\n")
+
+    monkeypatch.chdir(tmp_path)
+
+    assert main(["--not-git"]) == VIOLATIONS_FOUND
+
+    captured = capsys.readouterr()
+
+    assert "good.py" in captured.out
+    assert "notes.txt" not in captured.out
+
+
+def test_main_not_git_reports_findings(tmp_path, monkeypatch, capsys):
+
+    body = "".join(f"    if x{i}:\n        pass\n" for i in range(10))
+    (tmp_path / "bad.py").write_text("def f(x):\n" + body)
+
+    monkeypatch.chdir(tmp_path)
+
+    assert main(["--not-git"]) == VIOLATIONS_FOUND
+    assert "Function too complex" in capsys.readouterr().out
+
+
+def test_main_not_git_discovers_nested_python_files(tmp_path, monkeypatch, capsys):
+
+    (tmp_path / "nested").mkdir()
+    (tmp_path / "nested" / "deep.py").write_text("def f(a, b, c, d, e, f):\n    return a\n")
+
+    monkeypatch.chdir(tmp_path)
+
+    assert main(["--not-git"]) == VIOLATIONS_FOUND
+
+    out = capsys.readouterr().out
+
+    assert "nested/deep.py" in out
+    assert "Too many parameters" in out
+
+
+def test_main_not_git_skips_env_and_cache_directories(tmp_path, monkeypatch, capsys):
+
+    body = "".join(f"    if x{i}:\n        pass\n" for i in range(10))
+    (tmp_path / ".venv").mkdir()
+    (tmp_path / ".venv" / "lib.py").write_text("def f(x):\n" + body)
+    (tmp_path / "__pycache__").mkdir()
+    (tmp_path / "__pycache__" / "cached.py").write_text("def f(x):\n" + body)
+    (tmp_path / "generated.py").write_text("def f(x):\n" + body)
+    (tmp_path / "app.py").write_text("def f(x):\n" + body)
+
+    monkeypatch.chdir(tmp_path)
+
+    assert main(["--not-git"]) == VIOLATIONS_FOUND
+
+    out = capsys.readouterr().out
+
+    assert "app.py" in out
+    assert ".venv" not in out
+    assert "__pycache__" not in out
+    assert "generated.py" not in out
+
+
+def test_main_not_git_respects_ignore_path_flag(tmp_path, monkeypatch, capsys):
+
+    body = "".join(f"    if x{i}:\n        pass\n" for i in range(10))
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "app.py").write_text("def f(x):\n" + body)
+    (tmp_path / "tests" / "bad.py").write_text("def f(x):\n" + body)
+
+    monkeypatch.chdir(tmp_path)
+
+    assert main(["--not-git", "--ignore-path", "tests"]) == VIOLATIONS_FOUND
+
+    out = capsys.readouterr().out
+
+    assert "app.py" in out
+    assert "tests/bad.py" not in out
+
+
+def test_main_not_git_respects_config_ignore_paths(tmp_path, monkeypatch, capsys):
+
+    (tmp_path / "scrut.toml").write_text('ignore_paths = ["tests"]\n')
+    body = "".join(f"    if x{i}:\n        pass\n" for i in range(10))
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "app.py").write_text("def f(x):\n" + body)
+    (tmp_path / "tests" / "bad.py").write_text("def f(x):\n" + body)
+
+    monkeypatch.chdir(tmp_path)
+
+    assert main(["--not-git"]) == VIOLATIONS_FOUND
+
+    out = capsys.readouterr().out
+
+    assert "app.py" in out
+    assert "tests/bad.py" not in out
+
+
+def test_main_not_git_json_uses_existing_schema(tmp_path, monkeypatch, capsys):
+
+    body = "".join(f"    if x{i}:\n        pass\n" for i in range(10))
+    (tmp_path / "bad.py").write_text("def f(x):\n" + body)
+    (tmp_path / "good.py").write_text("def ok():\n    pass\n")
+
+    monkeypatch.chdir(tmp_path)
+
+    assert main(["--not-git", "--json"]) == VIOLATIONS_FOUND
+
+    data = json.loads(capsys.readouterr().out)
+
+    assert data["version"] == 1
+    assert data["tool"] == "scrut"
+    assert data["violations"][0]["file"] == "bad.py"
+    assert data["summary"] == {
+        "total": 1,
+        "errors": 0,
+        "warnings": 1,
+        "files_with_violations": 1,
+    }
+
+
+def test_main_not_git_json_is_deterministic_and_sorted(tmp_path, monkeypatch, capsys):
+
+    (tmp_path / "z.py").write_text("def f(a, b, c, d, e, f):\n    return a\n")
+    (tmp_path / "a.py").write_text("def f(a, b, c, d, e, f):\n    return a\n")
+
+    monkeypatch.chdir(tmp_path)
+
+    assert main(["--not-git", "--json"]) == VIOLATIONS_FOUND
+    first = capsys.readouterr().out
+
+    assert main(["--not-git", "--json"]) == VIOLATIONS_FOUND
+    second = capsys.readouterr().out
+
+    assert first == second
+    assert [v["file"] for v in json.loads(first)["violations"]] == ["a.py", "z.py"]
+
+
+def test_main_not_git_verbose(tmp_path, monkeypatch, capsys):
+
+    (tmp_path / "a.py").write_text("def ok():\n    pass\n")
+
+    monkeypatch.chdir(tmp_path)
+
+    assert main(["--not-git", "--verbose"]) == SUCCESS
+
+    captured = capsys.readouterr()
+
+    assert "review mode: all Python files on disk (--not-git)" in captured.err
+    assert "reviewing 1 of 1" in captured.err
+    assert "analyzed a.py" in captured.err
+    assert "All clean." in captured.out
+
+
+def test_main_not_git_quiet(tmp_path, monkeypatch, capsys):
+
+    (tmp_path / "bad.py").write_text("def f(a, b, c, d, e, f):\n    return a\n")
+
+    monkeypatch.chdir(tmp_path)
+
+    assert main(["--not-git", "--quiet"]) == VIOLATIONS_FOUND
+    assert capsys.readouterr().out == ""
+
+
+def test_main_not_git_with_all_files(tmp_path, monkeypatch, capsys):
+
+    (tmp_path / "a.py").write_text("def f(a, b, c, d, e, f):\n    return a\n")
+
+    monkeypatch.chdir(tmp_path)
+
+    assert main(["--not-git", "--all-files"]) == VIOLATIONS_FOUND
+    assert "Too many parameters" in capsys.readouterr().out
+
+
+def test_main_not_git_nothing_to_review(tmp_path, monkeypatch, capsys):
+
+    monkeypatch.chdir(tmp_path)
+
+    assert main(["--not-git"]) == ERROR
+
+    captured = capsys.readouterr()
+
+    assert captured.out == ""
+    assert "error: nothing to review" in captured.err
+    assert "hint: no reviewable .py files found on disk" in captured.err
+
+
+@pytest.mark.parametrize("flag", [["--changed"], ["--staged"]])
+def test_main_not_git_rejects_git_dependent_flags(tmp_path, monkeypatch, capsys, flag):
+
+    (tmp_path / "a.py").write_text("def ok():\n    pass\n")
+
+    monkeypatch.chdir(tmp_path)
+
+    assert main(["--not-git", *flag]) == ERROR
+
+    captured = capsys.readouterr()
+
+    assert captured.out == ""
+    assert "--not-git cannot be combined with --changed or --staged" in captured.err
+
+
+def test_main_not_git_works_inside_git_repo(tmp_path, monkeypatch, capsys):
+
+    def git(*args):
+        subprocess.run(["git", *args], cwd=tmp_path, check=True, capture_output=True)
+
+    git("init", "-q")
+    git("config", "user.email", "test@example.com")
+    git("config", "user.name", "Test")
+
+    (tmp_path / "a.py").write_text("def ok():\n    pass\n")
+    git("add", "-A")
+    git("-c", "commit.gpgsign=false", "commit", "-q", "-m", "initial")
+
+    monkeypatch.chdir(tmp_path)
+
+    assert main(["--not-git"]) == SUCCESS
+
+    assert "All clean." in capsys.readouterr().out
+
+
+def test_main_help_lists_not_git(capsys):
+
+    with pytest.raises(SystemExit):
+        main(["--help"])
+
+    assert "--not-git" in capsys.readouterr().out

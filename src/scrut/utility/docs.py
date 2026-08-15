@@ -28,7 +28,8 @@ Git repository -> changed .py files -> ast.parse -> rules -> findings
    (src/scrut/config/loader.py, src/scrut/config/default.py).
 2. Verify the working directory is a Git repository
    (git rev-parse --is-inside-work-tree). Otherwise print
-   "error: no Git repository found" to stderr and exit 2.
+   "error: no Git repository found" to stderr and exit 2
+   (skipped with --not-git).
 3. Compute the review set (src/scrut/git.py):
    - git diff HEAD --name-only        (staged + unstaged changes)
    - git diff --cached --name-only    (staged changes only, with --staged)
@@ -80,9 +81,12 @@ not by the command line.
     scrut --changed     show added/deleted lines of changed files instead of the report
     scrut --staged      review only files with staged Git changes
     scrut --all-files   review every eligible Python file, not just the diff
+    scrut --not-git     review every eligible .py file on disk; Git is not required
 
 Only one of --changed, --staged, and --all-files may be given; the
 output flags --json, --verbose, and --quiet combine with any scope.
+--not-git cannot be combined with --changed or --staged, which require
+Git history.
 
 CONFIGURATION
 -------------

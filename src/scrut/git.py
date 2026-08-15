@@ -64,6 +64,26 @@ def get_all_files():
     return result.stdout.splitlines()
 
 
+DISK_SKIP_DIRS = {".git", ".venv", "venv", "env", "__pycache__", ".pytest_cache"}
+
+
+def get_all_files_on_disk():
+    """List every .py file under the current directory as relative paths,
+    skipping well-known cache and environment directories (mirrors the
+    .gitignore-based exclusion Git applies with get_all_files())."""
+
+    files = []
+
+    for path in sorted(Path(".").rglob("*.py")):
+
+        if any(part in DISK_SKIP_DIRS for part in path.parts):
+            continue
+
+        files.append(str(path))
+
+    return files
+
+
 def get_reviewable_files(files, ignore_paths=()):
 
     reviewable = []

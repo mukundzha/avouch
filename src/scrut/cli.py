@@ -8,7 +8,7 @@ from scrut.config.default import DEFAULT_LIMITS
 from scrut.analyzer import analyze_file
 from scrut.report import generate_report, render_diff_view, render_json, vlog
 from scrut.utility.docs import render_docs
-from scrut.git import is_gitrepo, get_changed_files, get_staged_files, get_all_files, get_reviewable_files
+from scrut.git import is_gitrepo, get_changed_files, get_staged_files, get_all_files, get_all_files_on_disk, get_reviewable_files
 
 SUCCESS = 0
 VIOLATIONS_FOUND = 1
@@ -73,6 +73,11 @@ def _main(argv=None):
         action="store_true",
         help="review every eligible Python file in the repository",
     )
+    parser.add_argument(
+        "--not-git",
+        action="store_true",
+        help="analyze Python files without requiring a Git repository",
+    )
     args = parser.parse_args(argv)
 
     if args.docs:
@@ -91,12 +96,28 @@ def _main(argv=None):
     ignore_paths = config.get("ignore_paths", []) + (args.ignore_path or [])
     ignore_paths = list(dict.fromkeys(ignore_paths))
 
-    if not is_gitrepo():
+    if not args.not_git and not is_gitrepo():
         print("error: no Git repository found", file=sys.stderr)
-        print("hint: run Scrut from inside a Git repository", file=sys.stderr)
+        print(
+            "hint: run Scrut from inside a Git repository, or use --not-git to review files without Git",
+            file=sys.stderr,
+        )
         return ERROR
 
-    if args.all_files:
+    if args.not_git and (args.changed or args.staged):
+        print(
+            "error: --not-git cannot be combined with --changed or --staged",
+            file=sys.stderr,
+        )
+        print(
+            "hint: --changed and --staged compare against Git history, which --not-git bypasses",
+            file=sys.stderr,
+        )
+        return ERROR
+
+    if args.not_git:
+        candidate_files = get_all_files_on_disk()
+    elif args.all_files:
         candidate_files = get_all_files()
     elif args.staged:
         candidate_files = get_staged_files()
@@ -108,7 +129,10 @@ def _main(argv=None):
     if not reviewable_files:
         vlog(args.verbose, f"candidate files: {len(candidate_files)}, reviewable: 0")
         print("error: nothing to review", file=sys.stderr)
-        print("hint: change or stage .py files, or use --all-files", file=sys.stderr)
+        if args.not_git:
+            print("hint: no reviewable .py files found on disk", file=sys.stderr)
+        else:
+            print("hint: change or stage .py files, or use --all-files", file=sys.stderr)
         return ERROR
 
     vlog(
@@ -118,7 +142,14 @@ def _main(argv=None):
     )
     if args.verbose and ignore_paths:
         vlog(True, f"ignore paths: {', '.join(ignore_paths)}")
-    if args.all_files:
+    if args.not_git:
+        vlog(args.verbose, "review mode: all Python files on disk (--not-git)")
+        vlog(
+            args.verbose,
+            f"reviewing {len(reviewable_files)} of {len(candidate_files)} "
+            f"Python file{'s' if len(reviewable_files) != 1 else ''}",
+        )
+    elif args.all_files:
         vlog(args.verbose, "review mode: all repository files (git ls-files)")
         vlog(
             args.verbose,
