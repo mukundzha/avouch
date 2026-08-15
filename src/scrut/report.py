@@ -27,7 +27,6 @@ _TERMINAL_WIDTH = shutil.get_terminal_size((80, 24)).columns
 _LINE_WIDTH = min(_TERMINAL_WIDTH, 80)
 
 _INDENT = "  "
-_COL_GAP = "  "
 
 # Messages carry the measured/limit pair, e.g. "Too many parameters (6/5). ..."
 _COUNT = re.compile(r"\((\d+/\d+)\)")
@@ -326,10 +325,7 @@ def render_report(function_reports, file_reports, class_reports):
 
     # Nothing to show
     if not issues_by_file:
-        print(
-            _style("SCRUT", _BOLD)
-            + f" · {_count_segment(total_files, 'FILE', 'FILES')} · All clean."
-        )
+        print(_style("All clean.", _BOLD))
         return
 
     print(
@@ -338,36 +334,30 @@ def render_report(function_reports, file_reports, class_reports):
         + _count_parts(error_count, warning_count)
     )
     print(_style("─" * _LINE_WIDTH, _DIM))
+    print()
 
-    rows = []
+    first = True
 
     for file_name in sorted(issues_by_file):
 
-        for rule_id, rule_name, metric, is_error, line in _issue_rows(
+        try:
+            source_lines = Path(file_name).read_text(encoding="utf-8").splitlines()
+        except (OSError, UnicodeDecodeError):
+            source_lines = []
+
+        for item_name, rule_id, rule_name, metric, is_error, line, message in _issue_rows(
             issues_by_file[file_name]
         ):
-            rows.append(
-                (f"{file_name}:{line or 1}", rule_id, rule_name, metric, is_error)
+
+            if not first:
+                print()
+
+            first = False
+
+            _render_finding(
+                (file_name, item_name, rule_id, rule_name, message, is_error, line),
+                source_lines,
             )
-
-    file_width = max(_display_width(row[0]) for row in rows)
-    id_width = max(min(_display_width(row[1] or ""), 8) for row in rows)
-    name_width = max(_display_width(row[2]) for row in rows)
-    metric_width = max((len(row[3]) for row in rows), default=3)
-
-    free = _LINE_WIDTH - len(_INDENT) - 3 * len(_COL_GAP) - metric_width
-
-    # Clamp the variable columns so the list never exceeds the terminal
-    if file_width + name_width > free:
-        file_col = min(file_width, max(10, int(free * 0.45)))
-        file_width = file_col
-        name_width = max(free - file_col, 12)
-
-    for file_label, rule_id, rule_name, metric, is_error in rows:
-        _print_row(
-            (file_label, rule_id, rule_name, metric, is_error),
-            (file_width, id_width, name_width, metric_width),
-        )
 
     passing_files = [
         report["name"]
@@ -376,9 +366,63 @@ def render_report(function_reports, file_reports, class_reports):
     ]
 
     if passing_files:
+        print()
         print(_style("─" * _LINE_WIDTH, _DIM))
         print(_style("PASSED", _BOLD))
         render_passing(passing_files)
+
+
+def _render_finding(finding, source_lines):
+
+    file_name, item_name, rule_id, rule_name, message, is_error, line = finding
+
+    display_line = line or 1
+
+    location = _style(file_name, _BOLD, _CYAN) + _style(f":{display_line}:", _DIM)
+
+    message_part = _style(message, _RED) if is_error else message
+
+    if rule_id:
+        header = (
+            location + " " + _style(rule_id, _BLUE) + ": " + message_part
+        )
+    else:
+        header = location + " " + message_part
+
+    print(header)
+
+    if display_line > len(source_lines):
+        return
+
+    head = max(display_line - _CTX, 1)
+    tail = min(display_line + _CTX, len(source_lines))
+    width = len(str(tail))
+
+    caret = None
+
+    if item_name != "file":
+        col = source_lines[display_line - 1].find(item_name)
+
+        if col != -1:
+            caret = (
+                " " * col
+                + "^" * len(item_name)
+                + " "
+                + _style(rule_id or rule_name, _BLUE)
+            )
+
+    print(" " * width + " │")
+
+    for number in range(head, tail + 1):
+
+        print(
+            f"{number:>{width}} │ " + _style(source_lines[number - 1], _DIM)
+        )
+
+        if number == display_line and caret is not None:
+            print(" " * width + " │ " + caret)
+
+    print(" " * width + " │")
 
 
 def render_passing(passing_files):
@@ -439,7 +483,9 @@ def _issue_rows(entries):
             if key in file_seen:
                 continue
             file_seen.add(key)
-            file_rows.append((rule_id, rule_name, metric, severity == "ERROR", line))
+            file_rows.append(
+                (item_name, rule_id, rule_name, metric, severity == "ERROR", line, message)
+            )
             continue
 
         key = (item_name, rule_name, metric)
@@ -448,7 +494,9 @@ def _issue_rows(entries):
             continue
 
         seen.add(key)
-        rows.append((rule_id, rule_name, metric, severity == "ERROR", line))
+        rows.append(
+            (item_name, rule_id, rule_name, metric, severity == "ERROR", line, message)
+        )
 
     combined = file_rows + rows
 
@@ -458,26 +506,7 @@ def _issue_rows(entries):
 
 def _issue_order(row):
 
-    return row[4] or 0, row[0] or ""
-
-
-def _print_row(row, widths):
-
-    file_label, rule_id, rule_name, metric, is_error = row
-    file_width, id_width, name_width, metric_width = widths
-
-    color = _RED if is_error else None
-
-    print(
-        _INDENT
-        + _pad(_fit(file_label, file_width), file_width)
-        + _COL_GAP
-        + _pad(_fit(rule_id or "", id_width), id_width)
-        + _COL_GAP
-        + _pad(_fit(rule_name, name_width), name_width, color)
-        + " "
-        + _style(metric.rjust(metric_width), _BLUE)
-    )
+    return row[5] or 0, row[1] or ""
 
 
 def _count_segment(count, singular, plural):
@@ -498,32 +527,6 @@ def _count_parts(error_count, warning_count):
         return ""
 
     return " · " + " · ".join(parts)
-
-
-def _pad(text, width, code=None):
-
-    padded = text.ljust(width)
-
-    if code:
-        return _style(padded, code)
-
-    return padded
-
-
-def _fit(text, width):
-
-    if _display_width(text) <= width:
-        return text
-
-    head = text
-
-    while head and _display_width(head) >= width:
-        head = head[:-1]
-
-    if head:
-        return head + "…"
-
-    return "…"
 
 
 def _rule_label(message):

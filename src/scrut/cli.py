@@ -156,7 +156,7 @@ def _main(argv=None):
     vlog(
         args.verbose,
         f"config: {'scrut.toml' if Path('scrut.toml').exists() else 'defaults (no scrut.toml)'}, "
-        f"{len(ignore_paths)} ignore path(s)",
+        f"{len(ignore_paths)} ignore path(s)", 
     )
     if args.verbose and ignore_paths:
         vlog(True, f"ignore paths: {', '.join(ignore_paths)}")
