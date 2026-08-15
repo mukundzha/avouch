@@ -24,7 +24,9 @@ scrut
 - [Installation](#installation)
 - [Quick start](#quick-start)
 - [JSON output](#json-output)
+- [Quiet mode](#quiet-mode)
 - [GitHub Actions](#github-actions)
+- [Other CI systems](#other-ci-systems)
 - [Configuration](#configuration)
 - [Rules](#rules)
 - [How it works](#how-it-works)
@@ -173,7 +175,7 @@ scrut [Review Summary]
 $ cd /tmp/somewhere-without-git
 $ scrut
 error: no Git repository found
-hint: run Scrut from inside a Git repository
+hint: run Scrut from inside a Git repository, or use --not-git to review files without Git
 
 $ cd ~/fresh-checkout   # e.g. a CI runner
 $ scrut
@@ -551,20 +553,20 @@ files that cannot be read or parsed. Rules with a threshold render
 | SCR002 | Bare except | — | funcs | `detected` |
 | SCR003 | Boolean expression too complex | 5 | funcs, classes | `N/limit` |
 | SCR004 | Duplicate branch | — | funcs | `detected` |
-| SCR005 | Large comprehension | 10 | funcs | `N/limit` |
+| SCR005 | Large comprehension | 40 | funcs | `N/limit` |
 | SCR006 | Duplicate branch | — | funcs, classes | `detected` |
 | SCR007 | Long if/elif chain | 5 | funcs, classes | `N/limit` |
-| SCR008 | Lambda too complex | 5 | funcs | `N/limit` |
-| SCR009 | Too many local variables | 15 | funcs | `N/limit` |
+| SCR008 | Lambda too complex | 10 | funcs | `N/limit` |
+| SCR009 | Too many local variables | 30 | funcs | `N/limit` |
 | SCR010 | Class too large | 200 | classes | `N/limit` |
-| SCR011 | File too large | 400 | files | `N/limit` |
-| SCR012 | Function too long | 50 | funcs | `N/limit` |
-| SCR013 | Nesting too deep | 4 | funcs | `N/limit` |
+| SCR011 | File too large | 1000 | files | `N/limit` |
+| SCR012 | Function too long | 300 | funcs | `N/limit` |
+| SCR013 | Nesting too deep | 5 | funcs | `N/limit` |
 | SCR014 | Too many parameters | 5 | funcs | `N/limit` |
 | SCR015 | Nested function definition | — | funcs | `detected` |
-| SCR016 | Too many return statements | 3 | funcs | `N/limit` |
-| — | Function too complex | 10 | funcs | `N/limit` |
-| — | Class too complex | 10 | classes | `N/limit` |
+| SCR016 | Too many return statements | 6 | funcs | `N/limit` |
+| — | Function too complex | 40 | funcs | `N/limit` |
+| — | Class too complex | 40 | classes | `N/limit` |
 
 ### SCR001 — Async without await
 
@@ -641,7 +643,7 @@ if kind in ("csv", "json"):
 ### SCR005 — Large comprehension
 
 Flags list/set/dict comprehensions and generator expressions whose AST
-node count exceeds `max_large_comprehensions` (default 10). Past a few
+node count exceeds `max_large_comprehensions` (default 40). Past a few
 nested clauses a comprehension stops being an expression and becomes a
 program.
 
@@ -687,7 +689,7 @@ status_actions.get(status, unknown_action)()
 
 ### SCR008 — Lambda too complex
 
-Flags `lambda` bodies exceeding `max_lambda_nodes` (default 5) AST nodes.
+Flags `lambda` bodies exceeding `max_lambda_nodes` (default 10) AST nodes.
 
 ```python
 # bad
@@ -700,7 +702,7 @@ def transform(v):
 
 ### SCR009 — Too many local variables
 
-Flags functions assigning more than `max_local_variables` (default 15)
+Flags functions assigning more than `max_local_variables` (default 30)
 distinct names — every new name is cognitive load and a chance for
 shadowing. The count covers plain `x = ...` assignment targets only
 (`ast.Assign` with `ast.Name` targets); augmented and unpacked
@@ -716,19 +718,19 @@ responsibility.
 
 ### SCR011 — File too large
 
-Flags files exceeding `max_file_lines` (default 400). Fix: split into
+Flags files exceeding `max_file_lines` (default 1000). Fix: split into
 modules with single concerns.
 
 ### SCR012 — Function too long
 
 Flags functions whose line span exceeds `max_function_lines` (default
-50). Fix: extract helpers — `process_order` becomes `validate`,
+300). Fix: extract helpers — `process_order` becomes `validate`,
 `reserve`, and `send`.
 
 ### SCR013 — Nesting too deep
 
 Flags maximum nesting depth of block nodes above `max_nesting` (default
-4). Depth counts `if`, `for`, `while`, `async for`, `with`, `async
+5). Depth counts `if`, `for`, `while`, `async for`, `with`, `async
 with`, `try`, and `match` only. Comprehensions, lambdas, and nested
 `def`s do **not** add depth; sibling blocks do not stack — the metric is
 maximum depth, not block count.
@@ -801,14 +803,14 @@ def process_all(data):
 
 ### SCR016 — Too many return statements
 
-Flags functions with more than `max_return_statements` (default 3)
+Flags functions with more than `max_return_statements` (default 6)
 `return`s — every exit point is a path to maintain. Returns inside
 nested functions count toward the enclosing function's total.
 
 ### Function / Class too complex — cyclomatic complexity
 
 Flags functions and classes whose McCabe cyclomatic complexity exceeds
-`max_complexity` (default 10). Base 1, then +1 for every `if`, `for`,
+`max_complexity` (default 40). Base 1, then +1 for every `if`, `for`,
 `async for`, `while`, `try`, `except` handler, `match`, ternary,
 `assert`, `with`, `async with`, and every `and`/`or` chain — an
 `and`/`or` chain counts 1 regardless of how many operands it combines,
@@ -954,7 +956,7 @@ scrut/
 │       ├── default.py      # DEFAULT_LIMITS
 │       └── loader.py       # load_config, merge_limits, merge_rules
 └── tests/
-    └── test_git.py         # 59 tests, incl. a real-git end-to-end run
+    └── test_git.py         # 74 tests, incl. a real-git end-to-end run
 ```
 
 ---
@@ -979,7 +981,7 @@ violation, one for the boundary. The renderer displays any
 
 ## Testing
 
-All 59 tests run in a fraction of a second — no network, no package
+All 74 tests run in a fraction of a second — no network, no package
 installs:
 
 ```bash

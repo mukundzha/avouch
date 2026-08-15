@@ -238,7 +238,7 @@ that cannot be read or parsed. Rules with a threshold render
     SCR005  large comprehension
             A list/set/dict comprehension or generator expression with
             more AST nodes than the limit.
-            config: max_large_comprehensions (10). scope: functions.
+            config: max_large_comprehensions (40). scope: functions.
 
     SCR007  long if/elif chain
             One if/elif chain longer than the limit.
@@ -246,26 +246,26 @@ that cannot be read or parsed. Rules with a threshold render
 
     SCR008  lambda too complex
             A lambda whose body has more AST nodes than the limit.
-            config: max_lambda_nodes (5). scope: functions.
+            config: max_lambda_nodes (10). scope: functions.
 
     SCR009  too many local variables
             More distinct assigned names than the limit; measured on
             plain assignment targets only. Assignments inside nested
             functions count toward the enclosing function's total.
-            config: max_local_variables (15). scope: functions.
+            config: max_local_variables (30). scope: functions.
 
     SCR010  class too large
             Class line span exceeds max_class_lines (200).
 
     SCR011  file too large
-            File line count exceeds max_file_lines (400).
+            File line count exceeds max_file_lines (1000).
 
     SCR012  function too long
-            Function line span exceeds max_function_lines (50).
+            Function line span exceeds max_function_lines (300).
 
     SCR013  nesting too deep
             Maximum depth of block nodes (if/for/async for/while/with/
-            async with/try/match) exceeds max_nesting (4).
+            async with/try/match) exceeds max_nesting (5).
             Comprehensions, lambdas, and nested defs add no depth;
             sibling blocks do not stack - the metric is maximum depth,
             not block count.
@@ -281,7 +281,7 @@ that cannot be read or parsed. Rules with a threshold render
             scope: functions.
 
     SCR016  too many return statements
-            More "return" statements than max_return_statements (3).
+            More "return" statements than max_return_statements (6).
             Returns inside nested functions count toward the enclosing
             function's total.
             scope: functions.
@@ -292,7 +292,7 @@ that cannot be read or parsed. Rules with a threshold render
             assert/with/async with and each and/or chain - a chain
             counts 1 no matter how many operands it combines, so
             "a and (b or c)" adds 2; summed over the whole subtree.
-            Exceeds max_complexity (10).
+            Exceeds max_complexity (40).
             scope: funcs + classes.
 
 FINDINGS AND OUTPUT
@@ -370,7 +370,7 @@ EXAMPLES
     # outside a Git repository
     scrut
     error: no Git repository found
-    hint: run Scrut from inside a Git repository   (exit 2)
+    hint: run Scrut from inside a Git repository, or use --not-git to review files without Git   (exit 2)
 
     # no changed Python files in a clean checkout (as in CI)
     scrut
