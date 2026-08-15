@@ -18,7 +18,7 @@ ERROR = 2
 try:
     SCRUT_VERSION = importlib.metadata.version("scrut")
 except importlib.metadata.PackageNotFoundError:
-    SCRUT_VERSION = "0.3.1"
+    SCRUT_VERSION = "0.3.2"
 
 
 def _nothing_to_review_hint(args, candidate_files):

@@ -4,6 +4,45 @@ All notable changes to this project will be documented in this file.
 
 The format is inspired by Keep a Changelog.
 
+## [0.3.2]
+
+### Added
+- `--not-git`: review every eligible `.py` file on disk without a Git
+  repository.
+- Review scopes `--all-files` (whole repository) and `--staged` (index
+  only), plus the explicit `--changed` diff view of files vs `HEAD`.
+- `--quiet` (exit code only), `--verbose` (step-by-step diagnostics),
+  `--json` (stable, versioned machine-readable document), `--version`.
+- `--ignore-path` CLI flag, combined with `ignore_paths` from
+  `scrut.toml`.
+- Rule-grouped findings summary: a `BY RULE` section counting the most
+  common issues across the review.
+- GitHub Actions workflow in the repository itself (`scrut` reviews its
+  own code on every push and pull request).
+- Interactive terminal browser for `--docs`; piped output prints plain
+  text.
+
+### Changed
+- Findings render with source context: each finding prints a `file:line` header,
+  the rule id, the full message, and the offending code region with a
+  caret under the flagged name (compiler-style output).
+- Terminal report redesigned; findings render once per rule/component in
+  a single pass.
+- AST walks are cached per file, and dead depth traversal was removed —
+  analysis of large repositories is roughly twice as fast.
+- Configuration is parsed once per process and reused, keyed by file
+  mtime and size; edited `scrut.toml` files bust the cache.
+- Report records carry an explicit `kind` (`func`/`class`/`file`)
+  instead of shape sniffing.
+- Errors route to stderr; conflicting review-scope flags are rejected
+  with a hint.
+
+### Fixed
+- Documentation caught up with the implementation: rule limits, hints,
+  and test counts now match the shipped behavior.
+- Default limits relaxed to match `scrut.toml` so whole-repo CI checks
+  pass on the repository itself.
+
 ## [0.3.0]
 
 ### Added
