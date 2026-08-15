@@ -139,6 +139,22 @@ from scrut.toml.
 
 Setting a toggle to false disables that rule's findings.
 
+Observe whether the file was loaded with --verbose: the first
+diagnostics line prints "config: scrut.toml, N ignore path(s)" (or
+"config: defaults (no scrut.toml), 0 ignore path(s)" without a file).
+
+Malformed TOML or a non-list ignore_paths prints
+"error: invalid scrut.toml configuration: ..." and exits 2. Unknown
+keys are accepted and ignored silently - a typo is silently
+ineffective. Limit values are not type-checked: a non-numeric limit
+fails at analysis time with an internal error (exit 2).
+
+The CLI only appends --ignore-path to ignore_paths; there is no flag
+for [limits] or [rules]. Configuration applies equally to every review
+mode (--changed, --staged, --all-files) and output mode (--json,
+--quiet, --verbose). Severity is not configurable: rule findings are
+WARNING; ERROR is reserved for files that cannot be read or parsed.
+
 Example - the exact scrut.toml this repository lives by:
 
     ignore_paths = ["tests"]

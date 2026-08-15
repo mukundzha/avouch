@@ -361,15 +361,48 @@ comments, or dashboards.
 ## Configuration
 
 Configuration is optional, partial, and declarative. Scrut looks for a
-`scrut.toml` in the **current working directory** and merges it over the
-built-in defaults — any subset is valid. A malformed file raises instead
-of being silently ignored.
+`scrut.toml` in the **current working directory** — no upward search, so
+configuration is repository-local. Any subset of keys is merged over the
+built-in defaults; a missing or empty file simply means defaults, with
+no warning.
 
 ```toml
 [limits]        # numeric thresholds per rule
 [rules]         # on/off toggle per rule
 ignore_paths = ["tests", "migrations"]   # top-level: paths to skip
 ```
+
+### The configuration file
+
+- **Name and format:** `scrut.toml` in your working directory, plain TOML.
+- **Scope:** the current directory only. Scrut never searches parent
+  directories, so each project configures itself.
+- **Missing or empty:** defaults are used silently — there is no
+  "no configuration found" warning.
+- **Environment variables:** none. Configuration comes only from
+  `scrut.toml` (the `SCRUT_FONT` variable only selects a terminal font).
+
+### Changing a threshold
+
+List the limit you want under `[limits]`; only the keys you name change,
+everything else stays at its default:
+
+```toml
+[limits]
+max_parameters = 8    # allow up to 8 parameters instead of 5
+max_file_lines = 2500 # tolerate larger files
+```
+
+### Disabling a rule
+
+Put the rule under `[rules]` and set it to `false`:
+
+```toml
+[rules]
+nested_function = false   # stop reporting SCR015
+```
+
+A one-line `[rules]` section is a complete, valid configuration.
 
 ### Rule toggles
 
@@ -393,8 +426,7 @@ ignore_paths = ["tests", "migrations"]   # top-level: paths to skip
 | `max_return_statements` | `true` | SCR016 |
 | `max_complexity` | `true` | function/class complexity |
 
-Setting a toggle to `false` disables that rule's findings. A one-line
-`[rules]` section is a complete, valid configuration.
+Setting a toggle to `false` disables that rule's findings.
 
 ### Limits
 
@@ -432,34 +464,74 @@ CLI and TOML paths are combined and de-duplicated before analysis.
 Matching is purely string-based (`src/scrut/utility/is_ignored.py`) —
 no filesystem access.
 
+### Verifying that your configuration was loaded
+
+Run `scrut --verbose`: when there is a review set, the first diagnostics
+line reports the config source and the active ignore-path count:
+
+```text
+scrut: config: scrut.toml, 2 ignore path(s)
+scrut: ignore paths: tests, migrations
+```
+
+Without a `scrut.toml` the line reads `config: defaults (no
+scrut.toml), 0 ignore path(s)`. `scrut --docs` prints the same limits
+and rule defaults for reference.
+
+### Invalid and unknown configuration
+
+- Malformed TOML (or a non-list `ignore_paths`) prints
+  `error: invalid scrut.toml configuration: ...` on stderr and exits `2`.
+- Unknown keys are accepted and ignored silently — a typo makes the
+  intended setting silently ineffective, and Scrut does not warn
+  (`--verbose` shows only the file name and the ignore-path count).
+- Limit values are not type-checked: a non-numeric value such as
+  `max_parameters = "eight"` is not rejected and fails at analysis time
+  with an internal error (exit `2`).
+
+### How configuration interacts with the CLI
+
+- `--ignore-path` appends to the TOML `ignore_paths` (combined and
+  de-duplicated); there is no CLI override for `[limits]` or `[rules]`.
+- Configuration applies equally to every review mode — `--changed`,
+  `--staged`, and `--all-files` — and to every output mode: `--json`,
+  `--quiet`, and `--verbose`.
+- Severity is not configurable: rule findings are `WARNING`; `ERROR` is
+  reserved for files that cannot be read or parsed.
+- `--docs` renders the built-in documentation and exits before any
+  configuration is read, so it is unaffected by `scrut.toml`.
+
 ### Example
 
 ```toml
 # scrut.toml — the exact file this repository lives by
+ignore_paths = ["tests"]
+
 [limits]
-max_parameters          = 4
-max_nesting             = 5
-max_function_lines      = 50
-max_class_lines         = 50
-max_file_lines          = 50
-max_complexity          = 10
-max_boolean_conditions  = 6
-max_local_variables     = 15
-max_return_statements   = 6
-max_lambda_nodes        = 10
-max_large_comprehensions = 12
+max_parameters = 5
+max_nesting = 5
+max_function_lines = 300
+max_class_lines = 200
+max_file_lines = 1000
+max_complexity = 40
+max_boolean_conditions = 5
+max_if_chain = 5
+max_local_variables = 30
+max_return_statements = 6
+max_lambda_nodes = 10
+max_large_comprehensions = 40
 
 [rules]
-max_parameters          = true
-max_nesting             = false
-max_function_lines      = false
-max_class_lines         = true
-max_file_lines          = true
-max_complexity          = false
-max_boolean_conditions  = true
-max_local_variables     = true
-max_return_statements   = true
-max_lambda_nodes        = true
+max_parameters = true
+max_nesting = true
+max_function_lines = true
+max_class_lines = true
+max_file_lines = true
+max_complexity = true
+max_boolean_conditions = true
+max_local_variables = true
+max_return_statements = true
+max_lambda_nodes = true
 max_large_comprehensions = true
 ```
 
