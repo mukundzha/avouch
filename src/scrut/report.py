@@ -337,6 +337,8 @@ def render_report(function_reports, file_reports, class_reports):
     print()
 
     first = True
+    rule_counts = {}
+    rule_labels = {}
 
     for file_name in sorted(issues_by_file):
 
@@ -358,6 +360,14 @@ def render_report(function_reports, file_reports, class_reports):
                 (file_name, item_name, rule_id, rule_name, message, is_error, line),
                 source_lines,
             )
+
+            key = rule_id or rule_name
+            rule_counts[key] = rule_counts.get(key, 0) + 1
+            rule_labels[key] = rule_name
+
+    if rule_counts:
+        print()
+        _render_rule_summary(rule_counts, rule_labels)
 
     passing_files = [
         report["name"]
@@ -423,6 +433,43 @@ def _render_finding(finding, source_lines):
             print(" " * width + " │ " + caret)
 
     print(" " * width + " │")
+
+
+def _render_rule_summary(rule_counts, rule_labels):
+
+    ordered = sorted(rule_counts, key=lambda key: (-rule_counts[key], key))
+
+    plain = []
+
+    for key in ordered:
+
+        label = rule_labels[key]
+
+        if label == key:
+            plain.append(label)
+        else:
+            plain.append(key + " " + label)
+
+    rule_width = max(_display_width(cell) for cell in plain)
+    count_width = max(len(str(rule_counts[key])) for key in ordered)
+
+    print(_style("─" * _LINE_WIDTH, _DIM))
+    print(_style("BY RULE", _BOLD))
+    print()
+
+    for cell, key in zip(plain, ordered):
+
+        if cell == rule_labels[key]:
+            styled = cell
+        else:
+            styled = _style(key, _BLUE) + " " + rule_labels[key]
+
+        print(
+            _INDENT
+            + styled
+            + " " * (2 + rule_width - _display_width(cell))
+            + _style(str(rule_counts[key]).rjust(count_width), _BOLD)
+        )
 
 
 def render_passing(passing_files):
