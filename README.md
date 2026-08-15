@@ -261,8 +261,11 @@ Errors are never silenced: messages such as "error: no Git repository found" sti
 ## GitHub Actions
 
 Scrut can run as a GitHub Actions check on every pull request and push.
-The repository ships `.github/workflows/scrut.yml`; enable it in the
-repository's **Actions** tab and it runs on its own:
+
+### Add Scrut to your pipeline
+
+For an existing project, a minimal workflow installs the published package
+and reviews the whole checkout on every PR and push:
 
 ```yaml
 name: Scrut
@@ -280,28 +283,77 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
       - name: Install Scrut
-        run: pip install -e .
+        run: python -m pip install scrut
 
       - name: Run Scrut
         run: scrut --all-files --json
 ```
 
-The check installs the repository's own source with `pip install -e .`,
-so it tests the code in the pull request rather than a published release,
-then reviews the whole checked-out repository with `--all-files`. GitHub's
-checkout produces a clean working tree with no changes vs. `HEAD`, so the
-default review set (changed files) would be empty in CI; whole-repository
-review is the mode that works there. The workflow makes no GitHub API
-calls — a boring install and a single Scrut run.
+- `actions/checkout` puts the pull request's code in the runner's working
+  tree — Scrut analyzes the files that checkout provided, nothing more.
+- `actions/setup-python` provides a Python runtime; Scrut requires
+  Python 3.10+.
+- `python -m pip install scrut` installs the latest published release.
+  Pin a version (`scrut==0.3.1`) for reproducible runs.
+- `scrut --all-files --json` reviews every eligible `.py` file and prints
+  the machine-readable document to the job log. `permissions: contents:
+  read` is the only permission needed — the workflow makes no API calls.
 
-Results affect CI the same way they affect a local run. `--json` puts the
-machine-readable document in the job log and the exit code gates the job:
-`0` passes, `1` (findings reported) fails, `2` (Scrut could not run)
-fails too. Nothing is hidden with `|| true` — when the job fails, the
-JSON document in the log shows why. Findings already present in the
-repository will therefore fail the check until they are fixed or excluded
-with `ignore_paths` in `scrut.toml`.
+### Why `--all-files`
+
+The default review set is files changed vs. Git `HEAD`, so a freshly
+checked-out working tree — clean by construction — has nothing to review:
+`scrut` would print `error: nothing to review` and exit `2`. The same
+applies to `--changed` and `--staged`; they only make sense locally,
+against your own working tree. Whole-repository review is the mode that
+works in CI:
+
+| Command | Purpose | In CI |
+|---------|---------|------|
+| `scrut` | review files changed vs `HEAD` | empty set; don't use |
+| `scrut --changed` | diff view of changed files | empty set; don't use |
+| `scrut --staged` | review staged changes | empty set; don't use |
+| `scrut --all-files` | review every eligible Python file | the CI mode |
+| `scrut --json` | machine-readable document on stdout | combine with `--all-files` |
+| `scrut --quiet` | suppress report; exit code only | fine for gating |
+
+### Exit codes and failures
+
+Scrut's exit code behaves in CI exactly as it does locally: `0` is clean,
+`1` means findings were reported, `2` means Scrut could not run. GitHub
+Actions fails a job when a step exits non-zero, so `--all-files --json`
+fails the check on any finding, and the JSON document in the job log shows
+why. Nothing is hidden with `|| true`; findings already present in the
+repository fail the check until they are fixed or excluded with
+`ignore_paths` in `scrut.toml`.
+
+### The repository's own workflow
+
+The Scrut repository itself ships `.github/workflows/scrut.yml`; enable it
+in the repository's **Actions** tab and it runs on its own. It installs
+the repository's own source with `pip install -e .`, so it tests the code
+in the pull request rather than a published release, then reviews the
+whole checked-out repository with `--all-files --json`.
+
+---
+
+## Other CI systems
+
+Scrut is a plain console command with a documented exit code, so any CI
+system can run it with the same three steps:
+
+1. Install: `python -m pip install scrut`
+2. Run: `scrut --all-files --json`
+3. Treat the exit code as the result: `0` pass, `1` findings, `2` error.
+
+The JSON document on stdout is stable and versioned (see [JSON
+output](#json-output)), so it can be parsed for job annotations, summary
+comments, or dashboards.
 
 ---
 
