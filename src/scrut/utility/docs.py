@@ -49,6 +49,25 @@ Git repository -> changed .py files -> ast.parse -> rules -> findings
 7. Exit status: 0 = clean, 1 = findings reported, 2 = Scrut could
    not run.
 
+ARCHITECTURE
+------------
+A local CLI: one Python process, no daemons or network. Modules in
+execution order:
+
+    cli.py (scrut.cli:main)          argparse, orchestration, exit codes
+      |-- config/loader.py           scrut.toml merged over defaults
+      |-- git.py                     repository check + candidate files
+      |   `-- utility/is_generated.py, utility/is_ignored.py  filters
+      |-- analyzer.py                read -> ast.parse -> ast.walk
+      |   `-- rules/*.py             one analyze(node, limits) per rule
+      |-- report.py                  terminal report / JSON / diff view
+      `-- utility/docs.py            this text
+
+Only cli.py calls the pipeline modules; none of them imports cli.py.
+report.py imports git.py for the --changed diff view, and analyzer.py
+imports every rules module. --docs and --version return before config
+loading, so no Git or analysis code runs.
+
 INSTALLATION
 ------------
 Requires Python 3.10+ (ast.Match, tomllib) and git on PATH.

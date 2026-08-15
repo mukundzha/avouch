@@ -825,11 +825,58 @@ modules, two config modules, and one rule per file. The governing rule is
 that **`cli.py` only orchestrates** — every function it calls lives in
 another module, and nothing imports `cli.py`.
 
+Execution flow — this is the full path of a run (`--docs` and
+`--version` short-circuit before configuration):
+
+```mermaid
+flowchart TD
+    M["scrut.cli:main()"] --> P["argparse<br/>--json · --quiet · --verbose · --ignore-path ·<br/>--changed · --staged · --all-files · --not-git"]
+    P --> PD{"--docs?"}
+    PD -- "yes" --> D["utility/docs.py<br/>render_docs()"]
+    D --> X0["exit 0"]
+    PD -- "no" --> C["config/loader.py<br/>load_config(): scrut.toml merged over defaults"]
+    C --> G{"Git repository?"}
+    G -- "no · without --not-git" --> EX2A["exit 2<br/>error: no Git repository found"]
+    G -- "yes, or --not-git" --> S{"Selection mode"}
+    S -- "--not-git" --> F4["git.py: get_all_files_on_disk()<br/>*.py walked from CWD"]
+    S -- "--all-files" --> F3["git.py: get_all_files()<br/>git ls-files"]
+    S -- "--staged" --> F2["git.py: get_staged_files()<br/>git diff --cached --name-only"]
+    S -- "default" --> F1["git.py: get_changed_files()<br/>git diff HEAD --name-only + untracked"]
+    F1 --> R["git.py: get_reviewable_files()<br/>existing .py · not generated · not ignored"]
+    F2 --> R
+    F3 --> R
+    F4 --> R
+    R -- "none left" --> EX2B["exit 2<br/>error: nothing to review"]
+    R -- "files" --> A["analyzer.py: analyze_file()<br/>read file → ast.parse → ast.walk → rules"]
+    A --> O{"Output mode"}
+    O -- "--json" --> J["report.py: render_json()"]
+    O -- "--quiet" --> Q["no report"]
+    O -- "default + --changed" --> DIF["report.py: render_diff_view()<br/>git diff of the review set"]
+    O -- "default" --> H["report.py: generate_report()<br/>terminal report"]
+    J --> E{"Any findings?"}
+    Q --> E
+    DIF --> E
+    H --> E
+    E -- "no" --> EX0["exit 0"]
+    E -- "yes" --> EX1["exit 1"]
+```
+
+Module dependencies — what imports what (each arrow is a real `import`):
+
 ```mermaid
 flowchart LR
-    G[git.py<br/>review set: git diff HEAD + untracked] --> A[analyzer.py<br/>AST walk · rule dispatch]
-    C[config/<br/>scrut.toml + defaults] --> A
-    A --> R[report.py<br/>terminal report]
+    CLI["cli.py<br/>orchestration only"] -->|load_config, DEFAULT_RULES| CFG["config/loader.py"]
+    CLI -->|DEFAULT_LIMITS| DEF["config/default.py"]
+    CLI -->|review-set computation| GIT["git.py"]
+    CLI -->|analyze_file| AN["analyzer.py"]
+    CLI -->|render_json · render_diff_view<br/>generate_report · vlog| REP["report.py"]
+    CLI -->|render_docs| DOC["utility/docs.py"]
+    CFG --> DEF
+    AN --> RULES["rules/*.py<br/>one analyze(node, limits) per rule"]
+    AN --> COM["rules/complexity.py<br/>calculate_complexity"]
+    GIT --> IG["utility/is_generated.py"]
+    GIT --> II["utility/is_ignored.py"]
+    REP -->|get_file_diff| GIT
 ```
 
 | Module | Role | Key exports |
