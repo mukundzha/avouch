@@ -18,29 +18,24 @@ _CYAN = 36
 _BOLD = 1
 _DIM = 2
 
-_ICON_ERROR = "🔴"
-_ICON_WARNING = "🟡"
-_ICON_PASS = "🟢"
-_ICON_FUNC = "📊"
-_ICON_BAD_FILE = "🛑"
-_ICON_WARN_FILE = "⚠️"
-
 # How many lines the passing grid may occupy before collapsing
 _MAX_PASSING_LINES = 4
 
 _TERMINAL_WIDTH = shutil.get_terminal_size((80, 24)).columns
 
+# Editorial layout: dividers never exceed this, columns clamp to it
+_LINE_WIDTH = min(_TERMINAL_WIDTH, 80)
+
+_INDENT = "  "
+_COL_GAP = "  "
+
 # Messages carry the measured/limit pair, e.g. "Too many parameters (6/5). ..."
 _COUNT = re.compile(r"\((\d+/\d+)\)")
-
-_ANSI = re.compile(r"\x1b\[[0-9;]*m")
 
 _HUNK = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@")
 
 # Unchanged lines kept around each changed region
 _CTX = 1
-
-_RAIL = "│  "
 
 _FONT_APPLIED = False
 
@@ -120,23 +115,28 @@ def render_json(function_reports, file_reports, class_reports):
 def render_diff_view(file_paths):
 
     _set_font()
-    print(_style("scrut", _BOLD) + " " + _style("[Changed Files]", _DIM))
+    print(_style("[CHANGED FILES]", _BOLD))
+    print()
 
     for index, file_path in enumerate(file_paths):
 
         if index:
             print()
 
-        added, deleted, hunks, labels = _diff_view(file_path)
+        added, deleted, hunks, labels, is_new = _diff_view(file_path)
+
+        marker = "✓ " if is_new else ""
 
         print(
-            _style("╭─ ", _DIM)
+            _INDENT
+            + (_style(marker, _GREEN) if marker else "")
             + _style(file_path, _BOLD, _CYAN)
-            + _style(" +", _GREEN)
-            + _style(str(added), _GREEN)
-            + _style(" -", _RED)
-            + _style(str(deleted), _RED)
+            + "  "
+            + _style(f"+{added}", _GREEN)
+            + " "
+            + _style(f"-{deleted}", _RED)
         )
+        print(_style(_INDENT + "─" * max(_LINE_WIDTH - 2, 12), _DIM))
 
         for hunk in hunks:
             _render_hunk(hunk, labels)
@@ -152,11 +152,11 @@ def _diff_view(file_path):
         except (OSError, UnicodeDecodeError):
             lines = []
         hunks = [[("add", number, line) for number, line in enumerate(lines, 1)]]
-        return len(lines), 0, hunks, _context_labels(file_path)
+        return len(lines), 0, hunks, _context_labels(file_path), True
 
     added, deleted, hunks = _parse_diff(text)
 
-    return added, deleted, hunks, _context_labels(file_path)
+    return added, deleted, hunks, _context_labels(file_path), False
 
 
 def _parse_diff(text):
@@ -225,15 +225,15 @@ def _render_hunk(hunk, labels):
             label = labels.get(line_number)
 
             if label and label != current_label:
-                print(_style(label, _DIM))
+                print(_style(_INDENT + _INDENT + "  " + label, _DIM))
                 current_label = label
 
         if tag == "add":
-            print(_style("+ " + text, _GREEN))
+            print(_style(_INDENT + _INDENT + "+ " + text, _GREEN))
         elif tag == "del":
-            print(_style("- " + text, _RED))
+            print(_style(_INDENT + _INDENT + "- " + text, _RED))
         else:
-            print("│ " + text)
+            print(_INDENT + _INDENT + "  " + text)
 
 
 def _context_labels(file_path):
@@ -313,6 +313,7 @@ def render_report(function_reports, file_reports, class_reports):
                     issue["message"],
                     severity,
                     issue.get("rule"),
+                    report.get("line"),
                 )
             )
 
@@ -321,83 +322,66 @@ def render_report(function_reports, file_reports, class_reports):
             else:
                 warning_count += 1
 
+    total_files = len(file_reports)
+
     # Nothing to show
     if not issues_by_file:
-        print(_style("scrut", _BOLD) + " " + _style("[Review Summary]", _DIM))
-        print(_box([_ICON_PASS + " All clean."]))
+        print(
+            _style("SCRUT", _BOLD)
+            + f" · {_count_segment(total_files, 'FILE', 'FILES')} · All clean."
+        )
         return
 
-    total_files = len(file_reports)
-    failed_files = len(issues_by_file)
-    passed_files = total_files - failed_files
+    print(
+        _style("SCRUT", _BOLD)
+        + f" · {_count_segment(total_files, 'FILE', 'FILES')}"
+        + _count_parts(error_count, warning_count)
+    )
+    print(_style("─" * _LINE_WIDTH, _DIM))
 
-    render_summary(error_count, warning_count, passed_files, len(function_reports))
+    rows = []
 
-    _section("[NEEDS REVIEW]")
+    for file_name in sorted(issues_by_file):
 
-    # Print every file that needs attention
-    for index, file_name in enumerate(sorted(issues_by_file)):
+        for rule_id, rule_name, metric, is_error, line in _issue_rows(
+            issues_by_file[file_name]
+        ):
+            rows.append(
+                (f"{file_name}:{line or 1}", rule_id, rule_name, metric, is_error)
+            )
 
-        render_file(file_name, issues_by_file[file_name])
+    file_width = max(_display_width(row[0]) for row in rows)
+    id_width = max(min(_display_width(row[1] or ""), 8) for row in rows)
+    name_width = max(_display_width(row[2]) for row in rows)
+    metric_width = max((len(row[3]) for row in rows), default=3)
 
-        if index < failed_files - 1:
-            print()
+    free = _LINE_WIDTH - len(_INDENT) - 3 * len(_COL_GAP) - metric_width
 
-    # Collapsed list of compliant files
-    if passed_files:
-        passing_files = [
-            report["name"]
-            for report in file_reports
-            if report["name"] not in issues_by_file
-        ]
+    # Clamp the variable columns so the list never exceeds the terminal
+    if file_width + name_width > free:
+        file_col = min(file_width, max(10, int(free * 0.45)))
+        file_width = file_col
+        name_width = max(free - file_col, 12)
+
+    for file_label, rule_id, rule_name, metric, is_error in rows:
+        _print_row(
+            (file_label, rule_id, rule_name, metric, is_error),
+            (file_width, id_width, name_width, metric_width),
+        )
+
+    passing_files = [
+        report["name"]
+        for report in file_reports
+        if report["name"] not in issues_by_file
+    ]
+
+    if passing_files:
+        print(_style("─" * _LINE_WIDTH, _DIM))
+        print(_style("PASSED", _BOLD))
         render_passing(passing_files)
 
 
-def render_summary(error_count, warning_count, passed_files, function_count):
-
-    segments = []
-
-    if error_count:
-        segments.append(_segment(_ICON_ERROR, error_count, "error", "errors"))
-    if warning_count:
-        segments.append(_segment(_ICON_WARNING, warning_count, "warning", "warnings"))
-    if passed_files:
-        segments.append(_segment(_ICON_PASS, passed_files, "passed", "passed"))
-    if function_count:
-        segments.append(_segment(_ICON_FUNC, function_count, "func checked", "funcs checked"))
-
-    print(_style("scrut", _BOLD) + " " + _style("[Review Summary]", _DIM))
-    print(_box(segments))
-    print()
-
-
-def render_file(file_name, entries):
-
-    rows = _issue_rows(entries)
-
-    has_error = any(row[4] for row in rows)
-
-    if has_error:
-        icon = _ICON_BAD_FILE
-    else:
-        icon = _ICON_WARN_FILE
-
-    print(
-        _style("╭─ ", _DIM)
-        + icon
-        + " "
-        + _style(file_name, _BOLD, _CYAN)
-        + _style(f" ({len(entries)})", _DIM)
-    )
-
-    if rows:
-        _print_table(rows)
-
-
 def render_passing(passing_files):
-
-    print()
-    _section("[PASSING]")
 
     total = len(passing_files)
 
@@ -406,7 +390,7 @@ def render_passing(passing_files):
 
     name_width = max(_display_width(name) for name in passing_files)
 
-    columns = max(1, (min(_TERMINAL_WIDTH, 120) - 2) // (name_width + 4))
+    columns = max(1, (min(_TERMINAL_WIDTH, 120) - 4) // (name_width + 4))
 
     capacity = _MAX_PASSING_LINES * columns
 
@@ -426,7 +410,8 @@ def render_passing(passing_files):
 
     for start in range(0, len(cells), columns):
         print(
-            "  ".join(
+            _INDENT
+            + "  ".join(
                 styled + " " * (cell_width - _display_width(plain))
                 for styled, plain in cells[start : start + columns]
             ).rstrip()
@@ -440,105 +425,79 @@ def _issue_rows(entries):
     seen = set()
     file_seen = set()
 
-    for item_name, kind, message, severity, _ in entries:
+    for item_name, kind, message, severity, rule_id, line in entries:
 
-        rule = _rule_label(message)
+        rule_name = _rule_label(message)
         metric = _count_value(message)
 
         # The metric column renders "detected"; don't repeat it in the rule
-        if not metric and rule.endswith(" detected"):
-            rule = rule[: -len(" detected")]
+        if not metric and rule_name.endswith(" detected"):
+            rule_name = rule_name[: -len(" detected")]
 
         if item_name == "file":
-            key = (rule, metric)
+            key = (rule_name, metric)
             if key in file_seen:
                 continue
             file_seen.add(key)
-            file_rows.append(
-                ("<file>", "file", rule, metric, severity == "ERROR")
-            )
+            file_rows.append((rule_id, rule_name, metric, severity == "ERROR", line))
             continue
 
-        key = (item_name, rule, metric)
+        key = (item_name, rule_name, metric)
 
         if key in seen:
             continue
 
         seen.add(key)
-        rows.append((item_name, kind, rule, metric, severity == "ERROR"))
+        rows.append((rule_id, rule_name, metric, severity == "ERROR", line))
 
-    return file_rows + rows
+    combined = file_rows + rows
 
-
-def _print_table(rows):
-
-    use_metric = any(row[3] for row in rows)
-
-    if use_metric:
-        headers = ("Component", "Kind", "Rule", "Metric")
-    else:
-        headers = ("Component", "Kind", "Rule")
-
-    widths = [_display_width(header) for header in headers]
-
-    for component, kind, rule, metric, _ in rows:
-        widths[0] = max(widths[0], _display_width(component))
-        widths[1] = max(widths[1], _display_width(kind))
-        widths[2] = max(widths[2], _display_width(rule))
-        if use_metric:
-            widths[3] = max(widths[3], _display_width(metric))
-
-    gaps = len(headers) - 1
-    rail = _display_width(_RAIL)
-    free = (
-        _TERMINAL_WIDTH
-        - rail
-        - gaps * 2
-        - (widths[3] + 2 if use_metric else 0)
-    )
-
-    # Clamp the variable columns so the table never exceeds the terminal
-    if widths[0] + widths[2] > free:
-        component_col = min(widths[0], max(10, int(free * 0.45)))
-        widths[0] = component_col
-        widths[2] = max(free - component_col, 12)
-
-    header = _style(
-        _fit(headers[0], widths[0]).ljust(widths[0])
-        + "  "
-        + _fit(headers[1], widths[1]).ljust(widths[1])
-        + "  "
-        + _fit(headers[2], widths[2]).ljust(widths[2])
-        + ("  " + headers[3].rjust(widths[3]) if use_metric else ""),
-        _BOLD,
-    )
-
-    print(_RAIL + header)
-    print(_RAIL + "─" * (sum(widths) + gaps * 2))
-
-    for row in rows:
-        print(_row_line(row, widths, use_metric))
+    # File-level rows first, then by line, then by rule id
+    return sorted(combined, key=_issue_order)
 
 
-def _row_line(row, widths, use_metric):
+def _issue_order(row):
 
-    component, kind, rule, metric, is_error = row
+    return row[4] or 0, row[0] or ""
 
-    gap = "  "
+
+def _print_row(row, widths):
+
+    file_label, rule_id, rule_name, metric, is_error = row
+    file_width, id_width, name_width, metric_width = widths
+
     color = _RED if is_error else None
 
-    cells = [
-        _pad(_fit(component, widths[0]), widths[0]),
-        _pad(_fit(kind, widths[1]), widths[1], _DIM),
-        _pad(_fit(rule, widths[2]), widths[2], color),
-    ]
+    print(
+        _INDENT
+        + _pad(_fit(file_label, file_width), file_width)
+        + _COL_GAP
+        + _pad(_fit(rule_id or "", id_width), id_width)
+        + _COL_GAP
+        + _pad(_fit(rule_name, name_width), name_width, color)
+        + " "
+        + _style(metric.rjust(metric_width), _BLUE)
+    )
 
-    if use_metric and metric:
-        cells.append(_style(metric.rjust(widths[3]), _BLUE))
-    elif use_metric:
-        cells.append(_style("detected".rjust(widths[3]), _BLUE))
 
-    return (_RAIL + gap.join(cells)).rstrip()
+def _count_segment(count, singular, plural):
+
+    return _style(str(count), _BOLD) + " " + (singular if count == 1 else plural)
+
+
+def _count_parts(error_count, warning_count):
+
+    parts = []
+
+    if warning_count:
+        parts.append(_style(str(warning_count), _BOLD) + " WARN")
+    if error_count:
+        parts.append(_style(str(error_count), _BOLD) + " ERR")
+
+    if not parts:
+        return ""
+
+    return " · " + " · ".join(parts)
 
 
 def _pad(text, width, code=None):
@@ -581,53 +540,6 @@ def _count_value(message):
     match = _COUNT.search(message)
 
     return match.group(1) if match else ""
-
-
-def _section(title):
-
-    filler = "─" * max(min(_TERMINAL_WIDTH - len(title) - 2, 60), 12)
-    print(_style(title, _BOLD) + " " + _style(filler, _DIM))
-    print()
-
-
-def _segment(icon, count, singular, plural):
-
-    label = singular if count == 1 else plural
-
-    return f"{icon} {_style(str(count), _BOLD)} {label}"
-
-
-def _box(segments):
-
-    if not segments:
-        return ""
-
-    plain = [_ANSI.sub("", segment) for segment in segments]
-    width = max(_display_width(text) for text in plain)
-    separator = _style(" │ ", _DIM)
-
-    # Fit within the terminal: pad uniformly when there is room,
-    # otherwise fall back to natural widths so the box never wraps
-    padded_width = sum(width for _ in segments) + 3 * (len(segments) - 1) + 2
-
-    if padded_width > max(24, _TERMINAL_WIDTH - 2):
-        body = separator.join(segments)
-    else:
-        body = separator.join(
-            segment + " " * (width - _display_width(text))
-            for segment, text in zip(segments, plain)
-        )
-
-    inner = " " + body + " "
-    bar = "═" * _display_width(_ANSI.sub("", inner))
-
-    return "\n".join(
-        (
-            _style("╔" + bar + "╗", _DIM),
-            _style("║", _DIM) + inner + _style("║", _DIM),
-            _style("╚" + bar + "╝", _DIM),
-        )
-    )
 
 
 def _display_width(text):
