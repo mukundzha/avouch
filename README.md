@@ -126,47 +126,55 @@ mutually exclusive — pick at most one. The output flags `--json`,
 ```text
 $ scrut
 
-scrut [Review Summary]
-╔═════════════════════════════════════════╗
-║ 🟡 2 warnings      │ 📊 2 funcs checked ║
-╚═════════════════════════════════════════╝
+SCRUT · 2 FILES · 4 WARN
+────────────────────────────────────────────────────────────────────────────────
 
-[NEEDS REVIEW] ────────────────────────────────────────────────────────────
+bad.py:1: SCR002: Bare except detected. Catch a specific exception instead, e.g. except ValueError:.
+  │
+1 │ def connect(host, port, user, password, db, timeout):
+  │     ^^^^^^^ SCR002
+2 │     try:
+  │
 
-╭─ ⚠️ tests/bad.py (2)
-│  Component  Kind  Rule                 Metric
-│  ────────────────────────────────────────────
-│  messy      func  Too many parameters     6/5
+bad.py:1: SCR014: Too many parameters (6/5). Group related parameters into a data class or dictionary.
+  │
+1 │ def connect(host, port, user, password, db, timeout):
+  │     ^^^^^^^ SCR014
+2 │     try:
+  │
 
-[PASSING] ─────────────────────────────────────────────────────────────────
+────────────────────────────────────────────────────────────────────────────────
+BY RULE
 
-✓ src/util.py
+  SCR002 Bare except          1
+  SCR014 Too many parameters  1
+
+────────────────────────────────────────────────────────────────────────────────
+PASSED
+  ✓ src/util.py
 ```
 
-- **Summary box** — bold `scrut [Review Summary]` with per-severity
-  counts. Segments appear only when non-zero: 🔴 errors, 🟡 warnings,
-  🟢 passed files, 📊 functions checked.
-- **Per-file sections** — each file under `[NEEDS REVIEW]` is headed by
-  its name and finding count, flagged 🛑 when it contains an `ERROR`
-  and ⚠️ otherwise.
-- **Rows** — a `Component / Kind / Rule / Metric` table per file.
-  Components are functions, classes, or `<file>`; kinds are `func`,
-  `class`, `file`. Threshold rules render `measured/limit` (e.g. `6/5`);
-  presence rules render `detected`. Identical `(component, rule)` rows
-  are deduplicated per file — two findings on the same component and
-  rule render once, as above.
-- **Passing grid** — compliant files under `[PASSING]`, compressed to a
-  few lines with a `[+N more]` note when there are many.
+- **Header** — `SCRUT · N FILES · W WARN · E ERR`: file and per-severity
+  counts, followed by the per-file findings.
+- **Findings** — each finding renders compiler-style: a `file:line`
+  header with the rule id and full message, then the offending code
+  region with dimmed line numbers and a caret `^^^^^` under the flagged
+  name (rule id in blue on a TTY).
+- **BY RULE summary** — findings counted per rule, most common first,
+  with counts aligned on the right. Rendered only when findings exist.
+- **PASSING grid** — compliant files, compressed to a few lines with a
+  `[+N more]` note when there are many.
+- Identical `(component, rule)` findings are deduplicated per file — the
+  header counts every finding, so with overlapping rule IDs (SCR004 /
+  SCR006 duplicate-branch) the row count can be lower than the header
+  count.
 
 ### A clean run
 
 ```text
 $ scrut
 
-scrut [Review Summary]
-╔═══════════════╗
-║ 🟢 All clean. ║
-╚═══════════════╝
+All clean.
 ```
 
 ### Edge cases
@@ -849,7 +857,7 @@ flowchart TD
     F3 --> R
     F4 --> R
     R -- "none left" --> EX2B["exit 2<br/>error: nothing to review"]
-    R -- "files" --> A["analyzer.py: analyze_file()<br/>read file → ast.parse → ast.walk → rules"]
+    R -- "files" --> A["analyzer.py: analyze_file()<br/>read file → ast.parse → walk cache → rules"]
     A --> O{"Output mode"}
     O -- "--json" --> J["report.py: render_json()"]
     O -- "--quiet" --> Q["no report"]
@@ -876,6 +884,7 @@ flowchart LR
     CFG --> DEF
     AN --> RULES["rules/*.py<br/>one analyze(node, limits) per rule"]
     AN --> COM["rules/complexity.py<br/>calculate_complexity"]
+    RULES -->|walk| WAL["utility/walk.py<br/>cached ast.walk, reset per file"]
     GIT --> IG["utility/is_generated.py"]
     GIT --> II["utility/is_ignored.py"]
     REP -->|get_file_diff| GIT
@@ -888,6 +897,7 @@ flowchart LR
 | `git.py` | Git interaction | `is_gitrepo`, `get_changed_files`, `get_staged_files`, `get_reviewable_files` |
 | `analyzer.py` | AST analysis | `read_file`, `analyze_file` |
 | `rules/*.py` | One rule per module | `analyze(node, limits)` |
+| `utility/walk.py` | Cached AST traversal | `walk`, `reset_walk_cache` |
 | `report.py` | Terminal + JSON rendering | `render_report`, `generate_report`, `render_json` |
 | `config/default.py` | Default limits | `DEFAULT_LIMITS` |
 | `config/loader.py` | TOML load + merge | `load_config`, `merge_limits`, `merge_rules`, `DEFAULT_RULES` |
@@ -906,13 +916,14 @@ flowchart LR
 4. Per file, `analyzer.analyze_file(path, limits, rules)`:
    - reads UTF-8 (`OSError` → `ERROR` report), parses with `ast.parse`
      (`SyntaxError` → `ERROR` report; the rest of the run continues),
-   - walks the AST once with `ast.walk`, dispatching `FunctionDef`,
-     `AsyncFunctionDef`, and `ClassDef` nodes to their rules (rule
-     toggles are checked before dispatch, so disabled rules never run),
+   - resets the walk cache (`utility/walk.py`), then walks the AST,
+     dispatching `FunctionDef`, `AsyncFunctionDef`, and `ClassDef`
+     nodes to their rules (rule toggles are checked before dispatch, so
+     disabled rules never run),
    - returns `(function_reports, file_reports, class_reports)`.
 5. `report.render_report(...)` groups issues by file in a single pass
-   and renders the `scrut [Review Summary]` box, `[NEEDS REVIEW]`
-   component tables, and the `[PASSING]` grid.
+   and renders the `SCRUT` header, per-file findings, the BY RULE
+   summary, and the `[PASSING]` grid.
 
 `cli.py` with `--docs` short-circuits before config loading and calls
 `docs.render_docs()`, so no Git or analysis code runs. In a TTY that
@@ -922,14 +933,16 @@ the plain text.
 ### Reporting details
 
 Terminal rendering is hand-rolled ANSI in `src/scrut/report.py` — the
-`rich` dependency declared in `pyproject.toml` is not imported. Colors,
-box-drawing characters, and emoji are emitted only when stdout is a TTY;
-piped output is plain. Table columns are fitted to the terminal width
-and long rule names truncate with `…`, so lines never wrap. Identical
-`(component, rule)` rows are deduplicated per file, and file-level rows
-sort first. The `[PASSING]` grid collapses to at most a few lines, with
-a `[+N more]` note when it overflows. `SCRUT_FONT=name` is an opt-in
-OSC 50 font switch honored only by capable terminals.
+`rich` dependency declared in `pyproject.toml` is not imported. Colors
+are emitted only when stdout is a TTY; piped output is plain. Each
+finding renders compiler-style: a `file:line` header with rule id and
+message, the offending code region with dimmed line numbers, and a
+caret under the flagged name. Identical `(component, rule)` findings
+are deduplicated per file, and the BY RULE summary counts deduplicated
+findings, sorted most common first. The `[PASSING]` grid collapses to
+at most a few lines, with a `[+N more]` note when it overflows.
+`SCRUT_FONT=name` is an opt-in OSC 50 font switch honored only by
+capable terminals.
 
 ---
 
@@ -949,6 +962,7 @@ scrut/
 │   │   ├── max_nesting.py          # get_depth + BLOCK_NODES
 │   │   └── ...                     # one analyze(node, limits) per rule
 │   ├── utility/
+│   │   ├── walk.py         # cached ast.walk + per-file cache reset
 │   │   ├── docs.py         # --docs terminal documentation text
 │   │   ├── is_generated.py # generated-file patterns
 │   │   └── is_ignored.py   # ignore-path matching

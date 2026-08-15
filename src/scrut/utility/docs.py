@@ -39,9 +39,10 @@ Git repository -> changed .py files -> ast.parse -> rules -> findings
      paths (src/scrut/utility/is_ignored.py).
    If nothing remains, print "error: nothing to review" to stderr and
    exit 2.
-4. Parse each reviewable file with ast.parse and walk the tree once
-   (src/scrut/analyzer.py). A file that cannot be read or parsed
-   becomes an ERROR finding; the rest of the review continues.
+4. Parse each reviewable file with ast.parse and walk the tree once,
+   cached per file (src/scrut/analyzer.py, src/scrut/utility/walk.py).
+   A file that cannot be read or parsed becomes an ERROR finding; the
+   rest of the review continues.
 5. Run the rules enabled by the config against functions, async
    functions, classes, and files (see REVIEW RULES below).
 6. Print the report: human-readable by default (suppressed with
@@ -58,8 +59,9 @@ execution order:
       |-- config/loader.py           scrut.toml merged over defaults
       |-- git.py                     repository check + candidate files
       |   `-- utility/is_generated.py, utility/is_ignored.py  filters
-      |-- analyzer.py                read -> ast.parse -> ast.walk
+      |-- analyzer.py                read -> ast.parse -> walk cache
       |   `-- rules/*.py             one analyze(node, limits) per rule
+      |       `-- utility/walk.py    ast.walk cached per file
       |-- report.py                  terminal report / JSON / diff view
       `-- utility/docs.py            this text
 
@@ -299,27 +301,44 @@ FINDINGS AND OUTPUT
 -------------------
 Human report (colors only when stdout is a TTY):
 
-    scrut [Review Summary]
-    ╔═══════════════════════════════════════╗
-    ║ 🟡 2 warnings │ 🟢 1 passed │ 📊 3 funcs checked ║
-    ╚═══════════════════════════════════════╝
+    SCRUT · 2 FILES · 4 WARN
 
-    [NEEDS REVIEW]
-    ╭─ 🛑 src/app.py (2)
-    │  Component  Kind  Rule                Metric
-    │  ───────────────────────────────────────
-    │  handle     func  Too many parameters  6/5
-    │  <file>     file  File too large       41/50
+    src/app.py:1: SCR002: Bare except detected. Catch a specific
+    exception instead, e.g. except ValueError:.
+      │
+    1 │ def connect(host, port, user, password, db, timeout):
+      │     ^^^^^^^ SCR002
+    2 │     try:
+      │
 
-    [PASSING]
-    ✓ src/util.py  ✓ src/parser.py
+    src/app.py:1: SCR014: Too many parameters (6/5). Group related
+    parameters into a data class or dictionary.
+      │
+    1 │ def connect(host, port, user, password, db, timeout):
+      │     ^^^^^^^ SCR014
+    2 │     try:
+      │
 
-Components are functions, classes, or "<file>"; kinds are func, class,
-file. Identical (component, rule) rows are deduplicated per file, and
-file-level rows sort first. Long rule names are truncated with "..." so
-lines never wrap. The passing grid collapses to at most a few lines,
-with a "[+N more]" note when it overflows. SCRUT_FONT=name is an
-opt-in OSC 50 font switch honored only by capable terminals.
+    BY RULE
+
+      SCR002 Bare except          1
+      SCR014 Too many parameters  1
+
+    PASSED
+    ✓ src/util.py
+
+The header counts every finding per file and severity; when stdout is
+piped it is the only line that stands apart. Findings render
+compiler-style: a "file:line" header with the rule id and full
+message, the offending code region with dimmed line numbers, and a
+caret under the flagged name (rule id in blue on a TTY). Identical
+(component, rule) findings are deduplicated per file, so the header
+count can exceed the row count when two rule ids map to the same
+detection (SCR004/SCR006). The BY RULE summary lists deduplicated
+counts per rule, most common first, and appears only when findings
+exist. The passing grid collapses to at most a few lines, with a
+"[+N more]" note when it overflows. SCRUT_FONT=name is an opt-in
+OSC 50 font switch honored only by capable terminals.
 
 JSON (--json) prints a single document on stdout:
 
