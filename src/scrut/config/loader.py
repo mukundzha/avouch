@@ -27,6 +27,8 @@ DEFAULT_RULES = {
 
 DEFAULT_IGNORE_PATHS = []
 
+_load_cache = {}
+
 
 def load_config():
 
@@ -35,16 +37,27 @@ def load_config():
     if not config_path.exists():
         return {"limits": DEFAULT_LIMITS, "rules": DEFAULT_RULES, "ignore_paths": DEFAULT_IGNORE_PATHS}
 
+    stat = config_path.stat()
+
+    key = (str(config_path), stat.st_mtime_ns, stat.st_size)
+
+    cached = _load_cache.get(key)
+
+    if cached is not None:
+        return cached
+
     with open(config_path, "rb") as file:
         config = tomllib.load(file)
 
-    user_limits = config.get("limits", {})
-    user_rules = config.get("rules", {})
-    user_ignore_paths = config.get("ignore_paths", [])
+    merged_config = {
+        "limits": merge_limits(config.get("limits", {})),
+        "rules": merge_rules(config.get("rules", {})),
+        "ignore_paths": merge_ignore_paths(config.get("ignore_paths", [])),
+    }
 
-    merged_limits = merge_limits(user_limits)
+    _load_cache[key] = merged_config
 
-    return {"limits": merged_limits, "rules": merge_rules(user_rules), "ignore_paths": merge_ignore_paths(user_ignore_paths)}
+    return merged_config
 
 
 def merge_limits(user_limits):

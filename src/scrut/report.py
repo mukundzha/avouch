@@ -69,19 +69,7 @@ def render_json(function_reports, file_reports, class_reports):
 
     for report in class_reports + function_reports + file_reports:
 
-        if "file" in report:
-            file_name = report["file"]
-            item_name = report["name"]
-
-            if "parameters" in report:
-                kind = "func"
-            else:
-                kind = "class"
-
-        else:
-            file_name = report["name"]
-            item_name = "file"
-            kind = "file"
+        file_name = report.get("file", report["name"])
 
         for issue in report["issues"]:
             violations.append(
@@ -90,8 +78,8 @@ def render_json(function_reports, file_reports, class_reports):
                     "severity": issue["severity"],
                     "message": issue["message"],
                     "file": file_name,
-                    "name": item_name,
-                    "kind": kind,
+                    "name": report["name"],
+                    "kind": report["kind"],
                     "line": report.get("line"),
                 }
             )
@@ -282,21 +270,9 @@ def render_report(function_reports, file_reports, class_reports):
         if not report["issues"]:
             continue
 
-        # Function or class report
-        if "file" in report:
-            file_name = report["file"]
-            item_name = report["name"]
-
-            if "parameters" in report:
-                kind = "func"
-            else:
-                kind = "class"
-
-        # File report
-        else:
-            file_name = report["name"]
-            item_name = "file"
-            kind = "file"
+        file_name = report.get("file", report["name"])
+        item_name = report["name"]
+        kind = report["kind"]
 
         bucket = issues_by_file.setdefault(file_name, [])
 

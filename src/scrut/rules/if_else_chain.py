@@ -1,5 +1,7 @@
 import ast
 
+from scrut.utility.walk import walk
+
 
 def analyze(function_node, limits):
 
@@ -7,7 +9,7 @@ def analyze(function_node, limits):
 
     max_chain = limits.get("max_if_chain", 5)
 
-    for node in ast.walk(function_node):
+    for node in walk(function_node):
 
         # Only start from an if statement
         if not isinstance(node, ast.If):

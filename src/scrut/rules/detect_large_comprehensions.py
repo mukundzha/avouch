@@ -1,5 +1,7 @@
 import ast
 
+from scrut.utility.walk import walk
+
 
 def analyze(function_node, limits):
 
@@ -7,7 +9,7 @@ def analyze(function_node, limits):
 
     limit = limits.get("max_large_comprehensions", 10)
 
-    for node in ast.walk(function_node):
+    for node in walk(function_node):
 
         if not isinstance(
             node,
@@ -20,7 +22,7 @@ def analyze(function_node, limits):
         ):
             continue
 
-        comprehension_size = len(list(ast.walk(node)))
+        comprehension_size = len(list(walk(node)))
 
         if comprehension_size > limit:
             issues.append(

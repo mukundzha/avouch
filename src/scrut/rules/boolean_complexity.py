@@ -1,5 +1,7 @@
 import ast
 
+from scrut.utility.walk import walk
+
 def count_boolean_conditions(node):
     if isinstance(node, ast.BoolOp):
         return sum(count_boolean_conditions(value) for value in node.values)
@@ -11,7 +13,7 @@ def analyze(function_node, limits):
 
     issues = []
 
-    for node in ast.walk(function_node):
+    for node in walk(function_node):
 
         if isinstance(node, ast.BoolOp):
 

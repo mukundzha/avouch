@@ -1,12 +1,14 @@
 import ast
 
+from scrut.utility.walk import walk
+
 def analyze(function_node, limits):
     issues = []
     return_count = 0
 
     limit = limits.get("max_return_statements", 3)
 
-    for node in ast.walk(function_node):
+    for node in walk(function_node):
         if not isinstance(node,ast.Return):
             continue
         else:

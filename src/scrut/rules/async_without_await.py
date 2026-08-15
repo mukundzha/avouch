@@ -1,11 +1,13 @@
 import ast
 
+from scrut.utility.walk import walk
+
 
 def analyze(function_node, limits):
 
     issues = []
 
-    if any(isinstance(node, ast.Await) for node in ast.walk(function_node)):
+    if any(isinstance(node, ast.Await) for node in walk(function_node)):
         return issues
 
     issues.append(

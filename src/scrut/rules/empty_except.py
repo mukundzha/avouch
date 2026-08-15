@@ -1,11 +1,13 @@
 import ast
 
+from scrut.utility.walk import walk
+
 
 def analyze(function_node, limits):
 
     issues = []
 
-    for node in ast.walk(function_node):
+    for node in walk(function_node):
 
         # Skip everything that is not an if statement
         if not isinstance(node, ast.If):

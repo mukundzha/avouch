@@ -1,5 +1,7 @@
 import ast
 
+from scrut.utility.walk import walk
+
 
 def analyze(function_node, limits):
 
@@ -9,7 +11,7 @@ def analyze(function_node, limits):
 
     max_variables = limits.get("max_local_variables", 15)
 
-    for node in ast.walk(function_node):
+    for node in walk(function_node):
 
         # Is this an assignment?
         if not isinstance(node, ast.Assign):

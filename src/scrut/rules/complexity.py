@@ -1,5 +1,7 @@
 import ast
 
+from scrut.utility.walk import walk
+
 DECISION_NODES = (
     ast.If,
     ast.For,
@@ -17,7 +19,7 @@ DECISION_NODES = (
 def calculate_complexity(function_node):
     complexity = 1
 
-    for node in ast.walk(function_node):
+    for node in walk(function_node):
 
         if isinstance(node, DECISION_NODES):
             complexity += 1

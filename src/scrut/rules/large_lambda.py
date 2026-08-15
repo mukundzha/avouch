@@ -1,13 +1,15 @@
 import ast
 
+from scrut.utility.walk import walk
+
 def analyze(function_node, limits):
     issues = []
 
     max_lambda_nodes = limits.get("max_lambda_nodes", 5)
 
-    for node in ast.walk(function_node):
+    for node in walk(function_node):
         if isinstance(node,ast.Lambda):
-         body_size = len(list(ast.walk(node.body)))
+         body_size = len(list(walk(node.body)))
          if body_size > max_lambda_nodes:
             issues.append(
                 {

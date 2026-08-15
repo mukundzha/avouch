@@ -18,6 +18,8 @@ from scrut.rules.max_file_lines import analyze as analyze_max_file_lines
 
 import ast
 
+from scrut.utility.walk import reset_walk_cache
+
 
 def read_file(file_path):
 
@@ -26,6 +28,8 @@ def read_file(file_path):
 
 
 def analyze_file(file_path, limits, rules):
+
+    reset_walk_cache()
 
     try:
         source_code = read_file(file_path)
@@ -36,6 +40,7 @@ def analyze_file(file_path, limits, rules):
                 {
                     "name": file_path,
                     "lines": 0,
+                    "kind": "file",
                     "issues": [
                         {
                             "severity": "ERROR",
@@ -57,6 +62,7 @@ def analyze_file(file_path, limits, rules):
                     "name": file_path,
                     "lines": 0,
                     "line": exc.lineno,
+                    "kind": "file",
                     "issues": [
                         {
                             "severity": "ERROR",
@@ -77,19 +83,20 @@ def analyze_file(file_path, limits, rules):
             issues = []
             line_count = node.end_lineno - node.lineno + 1
             param_count = len(node.args.args)
-            nesting_depth = get_depth(node)
-            complexity = calculate_complexity(node)
 
             if rules["max_function_lines"]:
                 issues.extend(analyze_max_function_lines(node, limits))
 
-            if rules["max_complexity"] and complexity > limits["max_complexity"]:
-                issues.append(
-                    {
-                        "severity": "WARNING",
-                        "message": f"Function too complex ({complexity}/{limits['max_complexity']}). Reduce branching or extract nested logic into separate functions.",
-                    }
-                )
+            if rules["max_complexity"]:
+                complexity = calculate_complexity(node)
+
+                if complexity > limits["max_complexity"]:
+                    issues.append(
+                        {
+                            "severity": "WARNING",
+                            "message": f"Function too complex ({complexity}/{limits['max_complexity']}). Reduce branching or extract nested logic into separate functions.",
+                        }
+                    )
 
             if rules["max_boolean_conditions"]:
                 issues.extend(analyze_boolean_complexity(node, limits))
@@ -117,7 +124,7 @@ def analyze_file(file_path, limits, rules):
                     "line": node.lineno,
                     "lines": line_count,
                     "parameters": param_count,
-                    "nesting_depth": nesting_depth,
+                    "kind": "func",
                     "issues": issues,
                 }
             )
@@ -145,24 +152,26 @@ def analyze_file(file_path, limits, rules):
                     "line": node.lineno,
                     "lines": node.end_lineno - node.lineno + 1,
                     "parameters": len(node.args.args),
-                    "nesting_depth": get_depth(node),
+                    "kind": "func",
                     "issues": issues,
                 }
             )
 
         elif isinstance(node, ast.ClassDef):
             issues = []
-            complexity = calculate_complexity(node)
 
             if rules["max_class_lines"]:
                 issues.extend(analyze_max_class_lines(node, limits))
-            if rules["max_complexity"] and complexity > limits["max_complexity"]:
-                issues.append(
-                    {
-                        "severity": "WARNING",
-                        "message": f"Class too complex ({complexity}/{limits['max_complexity']}). Decompose into focused classes or extract complex methods.",
-                    }
-                )
+            if rules["max_complexity"]:
+                complexity = calculate_complexity(node)
+
+                if complexity > limits["max_complexity"]:
+                    issues.append(
+                        {
+                            "severity": "WARNING",
+                            "message": f"Class too complex ({complexity}/{limits['max_complexity']}). Decompose into focused classes or extract complex methods.",
+                        }
+                    )
 
             if rules["max_boolean_conditions"]:
                 issues.extend(analyze_boolean_complexity(node, limits))
@@ -174,6 +183,7 @@ def analyze_file(file_path, limits, rules):
                     "file": file_path,
                     "line": node.lineno,
                     "lines": node.end_lineno - node.lineno + 1,
+                    "kind": "class",
                     "issues": issues,
                 }
             )
@@ -188,6 +198,6 @@ def analyze_file(file_path, limits, rules):
 
     return (
         funcs,
-        [{"name": file_path, "lines": len(source_code.splitlines()), "issues": file_issues}],
+        [{"name": file_path, "lines": len(source_code.splitlines()), "kind": "file", "issues": file_issues}],
         cls,
     )
