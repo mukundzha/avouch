@@ -1015,7 +1015,14 @@ Mocking is limited to `subprocess.run` where a real Git isn't needed.
 
 ## Roadmap
 
-Informed by documented limitations, ordered by the pain they remove:
+The detailed implementation plan for the next release lives in
+[`roadmap.md`](roadmap.md) — v0.3.3 ships eight new capabilities under the
+theme "first run clean, every run relevant" (`scrut init`, a findings
+baseline, parallel review, CI-native output formats, rule man pages, a
+pre-commit hook, and inline diff annotations).
+
+Beyond v0.3.3, informed by documented limitations, ordered by the pain
+they remove:
 
 **0.4 — Configuration hardening**
 - Validate `scrut.toml` values with readable errors (today: a malformed
