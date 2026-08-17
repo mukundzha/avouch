@@ -3,7 +3,7 @@ import tomllib
 
 from .default import DEFAULT_LIMITS
 
-CONFIG_FILE = "scrut.toml"
+CONFIG_FILE = "avouch.toml"
 
 DEFAULT_RULES = {
     "max_parameters": True,
@@ -23,6 +23,7 @@ DEFAULT_RULES = {
     "nested_function": True,
     "bare_except": True,
     "async_without_await": True,
+    "mutable_default_args": True,
 }
 
 DEFAULT_IGNORE_PATHS = []
@@ -79,7 +80,7 @@ def merge_rules(user_rules):
 def merge_ignore_paths(user_ignore_paths):
 
     if not isinstance(user_ignore_paths, list):
-        raise ValueError("ignore_paths in scrut.toml must be a list of paths")
+        raise ValueError("ignore_paths in avouch.toml must be a list of paths")
 
     merged = DEFAULT_IGNORE_PATHS.copy()
 

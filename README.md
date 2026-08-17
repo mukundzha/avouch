@@ -1,19 +1,19 @@
-# scrut
+# avouch
 
 **Review the Python you changed, not the Python you inherited.**
 
-Scrut is a lightweight, Git-aware static analysis CLI for Python. It asks
+Avouch is a lightweight, Git-aware static analysis CLI for Python. It asks
 Git which files your next commit will touch, parses each changed `.py`
 file with the standard `ast` module, and reports structural problems
-against limits you configure in `scrut.toml`.
+against limits you configure in `avouch.toml`.
 
 No daemon. No network. No path lists to maintain. Run it in the seconds
 before `git push`, fix what it flags, push.
 
 ```bash
-pip install scrut
+pip install avouch
 cd your-repo
-scrut
+avouch
 ```
 
 ---
@@ -42,18 +42,18 @@ scrut
 
 ## Why it exists
 
-- **The review set is the diff, not the repository.** Scrut computes the
+- **The review set is the diff, not the repository.** Avouch computes the
   review set from Git at run time (`git diff HEAD --name-only` plus
   untracked files). Every finding is attributable to work you are about
   to push — never to the legacy you inherited.
 - **Metrics are exact.** Parameter counts, nesting depth, and line spans
   come from the AST, not regex. If a metric cannot be computed exactly,
-  Scrut does not claim it.
+  Avouch does not claim it.
 - **Errors are data.** An unreadable or syntactically broken file becomes
   an `ERROR` entry in the report. One broken file never cancels the
   review of the others.
-- **Scrut reviews; it does not gate.** The exit code signals the outcome —
-  `0` clean, `1` violations found, `2` Scrut error — but enforcement belongs
+- **Avouch reviews; it does not gate.** The exit code signals the outcome —
+  `0` clean, `1` violations found, `2` Avouch error — but enforcement belongs
   in an opt-in interface, not in a tool you run before every push.
 - **The runtime is the standard library.** Three `git` subprocess calls
   and
@@ -68,18 +68,18 @@ Requires **Python 3.10+** (rules use `ast.Match`; configuration uses
 `tomllib`) and **Git on `PATH`**.
 
 ```bash
-pip install scrut
+pip install avouch
 ```
 
 or from source:
 
 ```bash
-git clone https://github.com/mukundzha/scrut.git
-cd scrut
+git clone https://github.com/mukundzha/avouch.git
+cd avouch
 pip install -e .
 ```
 
-Both register the `scrut` console script (`scrut.cli:main`).
+Both register the `avouch` console script (`avouch.cli:main`).
 
 ---
 
@@ -90,24 +90,24 @@ The interface is one command with a small set of optional flags:
 ```bash
 cd your-repo
 # ... make a change ...
-scrut            # human report
-scrut --json     # one JSON document on stdout
-scrut --docs     # built-in documentation; no review performed
-scrut --version  # print the version and exit
-scrut --verbose  # step-by-step review details on stderr
-scrut --quiet    # analyze, print no report; exit code only
-scrut --changed  # compact added/deleted view of changed files vs HEAD
-scrut --staged   # review only files staged for the next commit
-scrut --all-files  # review every eligible Python file, not just the diff
-scrut --not-git  # review every eligible .py file on disk; no Git repo needed
-scrut --help     # every flag
+avouch            # human report
+avouch --json     # one JSON document on stdout
+avouch --docs     # built-in documentation; no review performed
+avouch --version  # print the version and exit
+avouch --verbose  # step-by-step review details on stderr
+avouch --quiet    # analyze, print no report; exit code only
+avouch --changed  # compact added/deleted view of changed files vs HEAD
+avouch --staged   # review only files staged for the next commit
+avouch --all-files  # review every eligible Python file, not just the diff
+avouch --not-git  # review every eligible .py file on disk; no Git repo needed
+avouch --help     # every flag
 ```
 
 The review set is defined by Git, so there is nothing to configure at
-invocation time. With `--not-git`, Scrut skips the Git requirement and
+invocation time. With `--not-git`, Avouch skips the Git requirement and
 reviews every eligible `.py` file found by walking the current
 directory instead (skipping Git, cache, and virtual-environment
-directories). Scrut reviews:
+directories). Avouch reviews:
 
 - tracked files modified vs. `HEAD` (`git diff HEAD --name-only`), and
 - untracked `.py` files (`git ls-files --others --exclude-standard`).
@@ -115,7 +115,7 @@ directories). Scrut reviews:
 Deleted paths and non-`.py` files are skipped. Committed, untouched files
 never appear in the output. Files that look generated
 (`generated.py`, `*_generated.py`, `codegen.py`, `autogen.py`, … — see
-`src/scrut/utility/is_generated.py`) are skipped too.
+`src/avouch/utility/is_generated.py`) are skipped too.
 
 The review-scope flags `--changed`, `--staged`, and `--all-files` are
 mutually exclusive — pick at most one. The output flags `--json`,
@@ -124,9 +124,9 @@ mutually exclusive — pick at most one. The output flags `--json`,
 ### A run with findings
 
 ```text
-$ scrut
+$ avouch
 
-SCRUT · 2 FILES · 4 WARN
+AVOUCH · 2 FILES · 4 WARN
 ────────────────────────────────────────────────────────────────────────────────
 
 bad.py:1: SCR002: Bare except detected. Catch a specific exception instead, e.g. except ValueError:.
@@ -154,7 +154,7 @@ PASSED
   ✓ src/util.py
 ```
 
-- **Header** — `SCRUT · N FILES · W WARN · E ERR`: file and per-severity
+- **Header** — `AVOUCH · N FILES · W WARN · E ERR`: file and per-severity
   counts, followed by the per-file findings.
 - **Findings** — each finding renders compiler-style: a `file:line`
   header with the rule id and full message, then the offending code
@@ -172,7 +172,7 @@ PASSED
 ### A clean run
 
 ```text
-$ scrut
+$ avouch
 
 All clean.
 ```
@@ -181,26 +181,26 @@ All clean.
 
 ```text
 $ cd /tmp/somewhere-without-git
-$ scrut
+$ avouch
 error: no Git repository found
-hint: run Scrut from inside a Git repository, or use --not-git to review files without Git
+hint: run Avouch from inside a Git repository, or use --not-git to review files without Git
 
 $ cd ~/fresh-checkout   # e.g. a CI runner
-$ scrut
+$ avouch
 error: nothing to review
 hint: nothing changed vs HEAD (CI checkouts are clean); use --all-files for a full review
 ```
 
 Colors are ANSI codes emitted only when stdout is a TTY. Piped output is
-plain, so `scrut | tee review.log` and CI capture work cleanly. Runtime
+plain, so `avouch | tee review.log` and CI capture work cleanly. Runtime
 errors are written to stderr, so stdout stays clean for piping and
 `--json` capture. The exit code is `0` when the review is clean, `1`
-when findings are reported, and `2` when Scrut cannot run.
+when findings are reported, and `2` when Avouch cannot run.
 
 ### Built-in documentation
 
-`scrut --docs` prints terminal documentation derived from this codebase —
-what Scrut does, the Git-aware workflow, every rule with its scope, every
+`avouch --docs` prints terminal documentation derived from this codebase —
+what Avouch does, the Git-aware workflow, every rule with its scope, every
 configuration key with its default, both output formats, and realistic
 examples — then exits `0` without running a review. It works anywhere,
 even outside a Git repository. In a real terminal it opens as an
@@ -215,13 +215,13 @@ For automation and CI, `--json` prints the review as a single JSON document
 on stdout, with no human-readable text mixed in:
 
 ```bash
-scrut --json
+avouch --json
 ```
 
 ```json
 {
   "version": 1,
-  "tool": "scrut",
+  "tool": "avouch",
   "violations": [
     {
       "rule": "SCR014",
@@ -250,19 +250,19 @@ the human table. `files_with_violations` is the number of distinct
 files containing at least one violation.
 
 The document is a stable, versioned contract for automation: `version`
-is the schema version (independent of the Scrut package version), `tool`
+is the schema version (independent of the Avouch package version), `tool`
 identifies the emitter, and the same input always produces the same JSON
 — no colors, timestamps, or diagnostics leak in. Exit codes behave
-exactly as in normal mode, so `scrut --json` can gate CI: parse stdout
+exactly as in normal mode, so `avouch --json` can gate CI: parse stdout
 for the findings and react to the exit status (`0` clean, `1` violations,
-`2` Scrut error).
+`2` Avouch error).
 
 ---
 
 ## Quiet mode
 
 `--quiet` runs the exact same analysis but prints no report; only the
-exit code signals the outcome (`0` clean, `1` violations, `2` Scrut
+exit code signals the outcome (`0` clean, `1` violations, `2` Avouch
 error), which makes it fit hooks and scripts that need only the status.
 Errors are never silenced: messages such as "error: no Git repository found" still print, `--json` still emits its document, and
 `--verbose` diagnostics still go to stderr.
@@ -271,22 +271,22 @@ Errors are never silenced: messages such as "error: no Git repository found" sti
 
 ## GitHub Actions
 
-Scrut can run as a GitHub Actions check on every pull request and push.
+Avouch can run as a GitHub Actions check on every pull request and push.
 
-### Add Scrut to your pipeline
+### Add Avouch to your pipeline
 
 For an existing project, a minimal workflow installs the published package
 and reviews the whole checkout on every PR and push:
 
 ```yaml
-name: Scrut
+name: Avouch
 
 on:
   pull_request:
   push:
 
 jobs:
-  scrut:
+  avouch:
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -298,20 +298,20 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install Scrut
-        run: python -m pip install scrut
+      - name: Install Avouch
+        run: python -m pip install avouch
 
-      - name: Run Scrut
-        run: scrut --all-files --json
+      - name: Run Avouch
+        run: avouch --all-files --json
 ```
 
 - `actions/checkout` puts the pull request's code in the runner's working
-  tree — Scrut analyzes the files that checkout provided, nothing more.
-- `actions/setup-python` provides a Python runtime; Scrut requires
+  tree — Avouch analyzes the files that checkout provided, nothing more.
+- `actions/setup-python` provides a Python runtime; Avouch requires
   Python 3.10+.
-- `python -m pip install scrut` installs the latest published release.
-  Pin a version (`scrut==0.3.1`) for reproducible runs.
-- `scrut --all-files --json` reviews every eligible `.py` file and prints
+- `python -m pip install avouch` installs the latest published release.
+  Pin a version (`avouch==0.3.1`) for reproducible runs.
+- `avouch --all-files --json` reviews every eligible `.py` file and prints
   the machine-readable document to the job log. `permissions: contents:
   read` is the only permission needed — the workflow makes no API calls.
 
@@ -319,33 +319,33 @@ jobs:
 
 The default review set is files changed vs. Git `HEAD`, so a freshly
 checked-out working tree — clean by construction — has nothing to review:
-`scrut` would print `error: nothing to review` and exit `2`. The same
+`avouch` would print `error: nothing to review` and exit `2`. The same
 applies to `--changed` and `--staged`; they only make sense locally,
 against your own working tree. Whole-repository review is the mode that
 works in CI:
 
 | Command | Purpose | In CI |
 |---------|---------|------|
-| `scrut` | review files changed vs `HEAD` | empty set; don't use |
-| `scrut --changed` | diff view of changed files | empty set; don't use |
-| `scrut --staged` | review staged changes | empty set; don't use |
-| `scrut --all-files` | review every eligible Python file | the CI mode |
-| `scrut --json` | machine-readable document on stdout | combine with `--all-files` |
-| `scrut --quiet` | suppress report; exit code only | fine for gating |
+| `avouch` | review files changed vs `HEAD` | empty set; don't use |
+| `avouch --changed` | diff view of changed files | empty set; don't use |
+| `avouch --staged` | review staged changes | empty set; don't use |
+| `avouch --all-files` | review every eligible Python file | the CI mode |
+| `avouch --json` | machine-readable document on stdout | combine with `--all-files` |
+| `avouch --quiet` | suppress report; exit code only | fine for gating |
 
 ### Exit codes and failures
 
-Scrut's exit code behaves in CI exactly as it does locally: `0` is clean,
-`1` means findings were reported, `2` means Scrut could not run. GitHub
+Avouch's exit code behaves in CI exactly as it does locally: `0` is clean,
+`1` means findings were reported, `2` means Avouch could not run. GitHub
 Actions fails a job when a step exits non-zero, so `--all-files --json`
 fails the check on any finding, and the JSON document in the job log shows
 why. Nothing is hidden with `|| true`; findings already present in the
 repository fail the check until they are fixed or excluded with
-`ignore_paths` in `scrut.toml`.
+`ignore_paths` in `avouch.toml`.
 
 ### The repository's own workflow
 
-The Scrut repository itself ships `.github/workflows/scrut.yml`; enable it
+The Avouch repository itself ships `.github/workflows/avouch.yml`; enable it
 in the repository's **Actions** tab and it runs on its own. It installs
 the repository's own source with `pip install -e .`, so it tests the code
 in the pull request rather than a published release, then reviews the
@@ -355,11 +355,11 @@ whole checked-out repository with `--all-files --json`.
 
 ## Other CI systems
 
-Scrut is a plain console command with a documented exit code, so any CI
+Avouch is a plain console command with a documented exit code, so any CI
 system can run it with the same three steps:
 
-1. Install: `python -m pip install scrut`
-2. Run: `scrut --all-files --json`
+1. Install: `python -m pip install avouch`
+2. Run: `avouch --all-files --json`
 3. Treat the exit code as the result: `0` pass, `1` findings, `2` error.
 
 The JSON document on stdout is stable and versioned (see [JSON
@@ -370,8 +370,8 @@ comments, or dashboards.
 
 ## Configuration
 
-Configuration is optional, partial, and declarative. Scrut looks for a
-`scrut.toml` in the **current working directory** — no upward search, so
+Configuration is optional, partial, and declarative. Avouch looks for a
+`avouch.toml` in the **current working directory** — no upward search, so
 configuration is repository-local. Any subset of keys is merged over the
 built-in defaults; a missing or empty file simply means defaults, with
 no warning.
@@ -384,13 +384,13 @@ ignore_paths = ["tests", "migrations"]   # top-level: paths to skip
 
 ### The configuration file
 
-- **Name and format:** `scrut.toml` in your working directory, plain TOML.
-- **Scope:** the current directory only. Scrut never searches parent
+- **Name and format:** `avouch.toml` in your working directory, plain TOML.
+- **Scope:** the current directory only. Avouch never searches parent
   directories, so each project configures itself.
 - **Missing or empty:** defaults are used silently — there is no
   "no configuration found" warning.
 - **Environment variables:** none. Configuration comes only from
-  `scrut.toml` (the `SCRUT_FONT` variable only selects a terminal font).
+  `avouch.toml` (the `AVOUCH_FONT` variable only selects a terminal font).
 
 ### Changing a threshold
 
@@ -434,6 +434,7 @@ A one-line `[rules]` section is a complete, valid configuration.
 | `max_parameters` | `true` | SCR014 |
 | `nested_function` | `true` | SCR015 |
 | `max_return_statements` | `true` | SCR016 |
+| `mutable_default_args` | `true` | SCR017 |
 | `max_complexity` | `true` | function/class complexity |
 
 Setting a toggle to `false` disables that rule's findings.
@@ -458,7 +459,7 @@ Setting a toggle to `false` disables that rule's findings.
 Limits are applied by key. A rule whose limit key is absent from the
 merged config falls back to the limit hardcoded in its own module, so a
 partial `[limits]` never turns a rule off. Every limit key in the table
-above lives in `DEFAULT_LIMITS` and can be tuned from `scrut.toml`.
+above lives in `DEFAULT_LIMITS` and can be tuned from `avouch.toml`.
 
 ### Ignoring paths
 
@@ -466,34 +467,34 @@ Two mechanisms exclude files, both matching repository-relative paths
 component-wise — `tests` skips `tests/` and `tests/x.py` but not
 `tests.py`; a bare `"."` skips the whole repository:
 
-- `scrut --ignore-path PATH` — repeatable CLI flag, or
+- `avouch --ignore-path PATH` — repeatable CLI flag, or
 - `ignore_paths = ["tests", "migrations"]` at the top level of
-  `scrut.toml` (must be a list; anything else raises).
+  `avouch.toml` (must be a list; anything else raises).
 
 CLI and TOML paths are combined and de-duplicated before analysis.
-Matching is purely string-based (`src/scrut/utility/is_ignored.py`) —
+Matching is purely string-based (`src/avouch/utility/is_ignored.py`) —
 no filesystem access.
 
 ### Verifying that your configuration was loaded
 
-Run `scrut --verbose`: when there is a review set, the first diagnostics
+Run `avouch --verbose`: when there is a review set, the first diagnostics
 line reports the config source and the active ignore-path count:
 
 ```text
-scrut: config: scrut.toml, 2 ignore path(s)
-scrut: ignore paths: tests, migrations
+avouch: config: avouch.toml, 2 ignore path(s)
+avouch: ignore paths: tests, migrations
 ```
 
-Without a `scrut.toml` the line reads `config: defaults (no
-scrut.toml), 0 ignore path(s)`. `scrut --docs` prints the same limits
+Without a `avouch.toml` the line reads `config: defaults (no
+avouch.toml), 0 ignore path(s)`. `avouch --docs` prints the same limits
 and rule defaults for reference.
 
 ### Invalid and unknown configuration
 
 - Malformed TOML (or a non-list `ignore_paths`) prints
-  `error: invalid scrut.toml configuration: ...` on stderr and exits `2`.
+  `error: invalid avouch.toml configuration: ...` on stderr and exits `2`.
 - Unknown keys are accepted and ignored silently — a typo makes the
-  intended setting silently ineffective, and Scrut does not warn
+  intended setting silently ineffective, and Avouch does not warn
   (`--verbose` shows only the file name and the ignore-path count).
 - Limit values are not type-checked: a non-numeric value such as
   `max_parameters = "eight"` is not rejected and fails at analysis time
@@ -509,12 +510,12 @@ and rule defaults for reference.
 - Severity is not configurable: rule findings are `WARNING`; `ERROR` is
   reserved for files that cannot be read or parsed.
 - `--docs` renders the built-in documentation and exits before any
-  configuration is read, so it is unaffected by `scrut.toml`.
+  configuration is read, so it is unaffected by `avouch.toml`.
 
 ### Example
 
 ```toml
-# scrut.toml — the exact file this repository lives by
+# avouch.toml — the exact file this repository lives by
 ignore_paths = ["tests"]
 
 [limits]
@@ -543,13 +544,14 @@ max_local_variables = true
 max_return_statements = true
 max_lambda_nodes = true
 max_large_comprehensions = true
+mutable_default_args = true
 ```
 
 ---
 
 ## Rules
 
-Scrut ships 16 rule identifiers (SCR001–SCR016) plus two cyclomatic
+Avouch ships 17 rule identifiers (SCR001–SCR017) plus two cyclomatic
 complexity checks on functions and classes sharing the `max_complexity`
 limit. Every rule finding is a `WARNING`; `ERROR` findings exist only for
 files that cannot be read or parsed. Rules with a threshold render
@@ -573,6 +575,7 @@ files that cannot be read or parsed. Rules with a threshold render
 | SCR014 | Too many parameters | 5 | funcs | `N/limit` |
 | SCR015 | Nested function definition | — | funcs | `detected` |
 | SCR016 | Too many return statements | 6 | funcs | `N/limit` |
+| SCR017 | Mutable default argument | — | funcs | `detected` |
 | — | Function too complex | 40 | funcs | `N/limit` |
 | — | Class too complex | 40 | classes | `N/limit` |
 
@@ -815,6 +818,34 @@ Flags functions with more than `max_return_statements` (default 6)
 `return`s — every exit point is a path to maintain. Returns inside
 nested functions count toward the enclosing function's total.
 
+### SCR017 — Mutable default argument
+
+Flags default parameter values that are mutable — list/dict/set
+literals (`[]`, `{}`, `{1, 2}`) or mutable constructor calls
+(`list()`, `dict()`, `set()`, `bytearray()`, `defaultdict()`,
+`OrderedDict()`). Defaults are evaluated once at definition time, so
+the same object is shared across every call that omits the argument —
+state leaks between unrelated calls.
+
+```python
+# bad
+def add_item(item, items=[]):
+    items.append(item)
+    return items
+
+# good
+def add_item(item, items=None):
+    if items is None:
+        items = []
+    items.append(item)
+    return items
+```
+
+The rule inspects only the function's own defaults — a mutable default
+on a nested function is reported once, by that function's own finding,
+never duplicated in the enclosing function's report. Immutable defaults
+(`None`, strings, numbers, tuples, `frozenset()`) are never flagged.
+
 ### Function / Class too complex — cyclomatic complexity
 
 Flags functions and classes whose McCabe cyclomatic complexity exceeds
@@ -840,11 +871,11 @@ Execution flow — this is the full path of a run (`--docs` and
 
 ```mermaid
 flowchart TD
-    M["scrut.cli:main()"] --> P["argparse<br/>--json · --quiet · --verbose · --ignore-path ·<br/>--changed · --staged · --all-files · --not-git"]
+    M["avouch.cli:main()"] --> P["argparse<br/>--json · --quiet · --verbose · --ignore-path ·<br/>--changed · --staged · --all-files · --not-git"]
     P --> PD{"--docs?"}
     PD -- "yes" --> D["utility/docs.py<br/>render_docs()"]
     D --> X0["exit 0"]
-    PD -- "no" --> C["config/loader.py<br/>load_config(): scrut.toml merged over defaults"]
+    PD -- "no" --> C["config/loader.py<br/>load_config(): avouch.toml merged over defaults"]
     C --> G{"Git repository?"}
     G -- "no · without --not-git" --> EX2A["exit 2<br/>error: no Git repository found"]
     G -- "yes, or --not-git" --> S{"Selection mode"}
@@ -922,7 +953,7 @@ flowchart LR
      disabled rules never run),
    - returns `(function_reports, file_reports, class_reports)`.
 5. `report.render_report(...)` groups issues by file in a single pass
-   and renders the `SCRUT` header, per-file findings, the BY RULE
+   and renders the `AVOUCH` header, per-file findings, the BY RULE
    summary, and the `[PASSING]` grid.
 
 `cli.py` with `--docs` short-circuits before config loading and calls
@@ -932,7 +963,7 @@ the plain text.
 
 ### Reporting details
 
-Terminal rendering is hand-rolled ANSI in `src/scrut/report.py` — the
+Terminal rendering is hand-rolled ANSI in `src/avouch/report.py` — the
 `rich` dependency declared in `pyproject.toml` is not imported. Colors
 are emitted only when stdout is a TTY; piped output is plain. Each
 finding renders compiler-style: a `file:line` header with rule id and
@@ -941,7 +972,7 @@ caret under the flagged name. Identical `(component, rule)` findings
 are deduplicated per file, and the BY RULE summary counts deduplicated
 findings, sorted most common first. The `[PASSING]` grid collapses to
 at most a few lines, with a `[+N more]` note when it overflows.
-`SCRUT_FONT=name` is an opt-in OSC 50 font switch honored only by
+`AVOUCH_FONT=name` is an opt-in OSC 50 font switch honored only by
 capable terminals.
 
 ---
@@ -949,10 +980,10 @@ capable terminals.
 ## Repository layout
 
 ```
-scrut/
+avouch/
 ├── pyproject.toml          # packaging, console script
-├── scrut.toml              # limits this repo lives by
-├── src/scrut/
+├── avouch.toml              # limits this repo lives by
+├── src/avouch/
 │   ├── cli.py              # entry point; orchestration only
 │   ├── git.py              # review-set computation
 │   ├── analyzer.py         # AST walk, rule dispatch
@@ -977,7 +1008,7 @@ scrut/
 
 ## Adding a rule
 
-A rule is a module in `src/scrut/rules/` exposing
+A rule is a module in `src/avouch/rules/` exposing
 `analyze(node, limits) -> list[issue]`, where an issue is:
 
 ```python
@@ -1017,7 +1048,7 @@ Mocking is limited to `subprocess.run` where a real Git isn't needed.
 
 The detailed implementation plan for the next release lives in
 [`roadmap.md`](roadmap.md) — v0.3.3 ships eight new capabilities under the
-theme "first run clean, every run relevant" (`scrut init`, a findings
+theme "first run clean, every run relevant" (`avouch init`, a findings
 baseline, parallel review, CI-native output formats, rule man pages, a
 pre-commit hook, and inline diff annotations).
 
@@ -1025,14 +1056,14 @@ Beyond v0.3.3, informed by documented limitations, ordered by the pain
 they remove:
 
 **0.4 — Configuration hardening**
-- Validate `scrut.toml` values with readable errors (today: a malformed
+- Validate `avouch.toml` values with readable errors (today: a malformed
   file raises)
-- Search upward from the working directory for `scrut.toml` (today: CWD
+- Search upward from the working directory for `avouch.toml` (today: CWD
   only)
 
 **1.0 — CI-grade interface**
 - Configurable exit codes, so enforcement thresholds can be tuned without
-  changing scrut's review-only default
+  changing avouch's review-only default
 
 New rules must survive the philosophy section — the ceiling is raised
 deliberately, not by accretion.
@@ -1048,7 +1079,7 @@ the output is always relevant to the next push.
 
 **Why `git diff HEAD` and not `git diff`?**
 Plain `git diff` covers only unstaged changes. `HEAD` covers staged plus
-unstaged — the complete set of files about to be pushed — and scrut adds
+unstaged — the complete set of files about to be pushed — and avouch adds
 untracked files on top, so brand-new files are never missed.
 
 **Why AST instead of regex?**
@@ -1057,8 +1088,8 @@ distinguish a definition from a call. The AST answers structural
 questions exactly for every valid Python file.
 
 **What are the exit codes?**
-Scrut returns `0` when the review is clean, `1` when findings are
-reported, and `2` when Scrut cannot run. It still reviews rather than
+Avouch returns `0` when the review is clean, `1` when findings are
+reported, and `2` when Avouch cannot run. It still reviews rather than
 gates — enforcement stays in whatever calls it — but CI can now react to
 the outcome directly.
 
@@ -1083,8 +1114,8 @@ bounded by the size of your diff, not your repository.
 Setup:
 
 ```bash
-git clone https://github.com/mukundzha/scrut.git
-cd scrut
+git clone https://github.com/mukundzha/avouch.git
+cd avouch
 pip install -e .
 python -m pytest tests/
 ```

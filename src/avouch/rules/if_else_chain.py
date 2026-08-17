@@ -1,6 +1,6 @@
 import ast
 
-from scrut.utility.walk import walk
+from avouch.utility.walk import walk
 
 
 def analyze(function_node, limits):

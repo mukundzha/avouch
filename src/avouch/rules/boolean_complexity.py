@@ -1,6 +1,6 @@
 import ast
 
-from scrut.utility.walk import walk
+from avouch.utility.walk import walk
 
 def count_boolean_conditions(node):
     if isinstance(node, ast.BoolOp):

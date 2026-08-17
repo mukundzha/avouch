@@ -7,7 +7,7 @@ import unicodedata
 import json
 from pathlib import Path
 
-from scrut.git import get_file_diff
+from avouch.git import get_file_diff
 
 _USE_COLOR = sys.stdout.isatty()
 
@@ -43,7 +43,7 @@ def _set_font():
 
     global _FONT_APPLIED
 
-    font = os.environ.get("SCRUT_FONT")
+    font = os.environ.get("AVOUCH_FONT")
 
     # Opt-in terminal font override (OSC 50, ignored by unsupported terminals)
     if _FONT_APPLIED or not (_USE_COLOR and font):
@@ -60,7 +60,7 @@ def generate_report(function_reports, file_reports, class_reports):
 def vlog(verbose, message):
 
     if verbose:
-        print(f"scrut: {message}", file=sys.stderr)
+        print(f"avouch: {message}", file=sys.stderr)
 
 
 def render_json(function_reports, file_reports, class_reports):
@@ -93,7 +93,7 @@ def render_json(function_reports, file_reports, class_reports):
 
     print(
         json.dumps(
-            {"version": 1, "tool": "scrut", "violations": violations, "summary": summary},
+            {"version": 1, "tool": "avouch", "violations": violations, "summary": summary},
             indent=2,
         )
     )
@@ -305,7 +305,7 @@ def render_report(function_reports, file_reports, class_reports):
         return
 
     print(
-        _style("SCRUT", _BOLD)
+        _style("AVOUCH", _BOLD)
         + f" · {_count_segment(total_files, 'FILE', 'FILES')}"
         + _count_parts(error_count, warning_count)
     )

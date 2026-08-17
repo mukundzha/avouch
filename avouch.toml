@@ -26,3 +26,4 @@ max_local_variables = true
 max_return_statements = true
 max_lambda_nodes = true
 max_large_comprehensions = true
+mutable_default_args = true

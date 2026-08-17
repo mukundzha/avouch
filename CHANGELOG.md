@@ -14,10 +14,10 @@ The format is inspired by Keep a Changelog.
 - `--quiet` (exit code only), `--verbose` (step-by-step diagnostics),
   `--json` (stable, versioned machine-readable document), `--version`.
 - `--ignore-path` CLI flag, combined with `ignore_paths` from
-  `scrut.toml`.
+  `avouch.toml`.
 - Rule-grouped findings summary: a `BY RULE` section counting the most
   common issues across the review.
-- GitHub Actions workflow in the repository itself (`scrut` reviews its
+- GitHub Actions workflow in the repository itself (`avouch` reviews its
   own code on every push and pull request).
 - Interactive terminal browser for `--docs`; piped output prints plain
   text.
@@ -31,7 +31,7 @@ The format is inspired by Keep a Changelog.
 - AST walks are cached per file, and dead depth traversal was removed —
   analysis of large repositories is roughly twice as fast.
 - Configuration is parsed once per process and reused, keyed by file
-  mtime and size; edited `scrut.toml` files bust the cache.
+  mtime and size; edited `avouch.toml` files bust the cache.
 - Report records carry an explicit `kind` (`func`/`class`/`file`)
   instead of shape sniffing.
 - Errors route to stderr; conflicting review-scope flags are rejected
@@ -40,7 +40,7 @@ The format is inspired by Keep a Changelog.
 ### Fixed
 - Documentation caught up with the implementation: rule limits, hints,
   and test counts now match the shipped behavior.
-- Default limits relaxed to match `scrut.toml` so whole-repo CI checks
+- Default limits relaxed to match `avouch.toml` so whole-repo CI checks
   pass on the repository itself.
 - The repository's own whole-repo scan is clean: node-dispatch logic was
   extracted out of `analyze_file` (nesting deep enough to trip SCR013)
@@ -52,7 +52,7 @@ The format is inspired by Keep a Changelog.
 ### Added
 - Stable rule identifiers: every rule now carries an ID in the
   `SCR001`–`SCR016` range.
-- Per-rule toggles via a `[rules]` section in `scrut.toml`, so any rule
+- Per-rule toggles via a `[rules]` section in `avouch.toml`, so any rule
   can be disabled without touching code.
 - New rules (11 new rule IDs; the five v0.2 checks were carried over):
   - `SCR001` async function without `await` expression
@@ -69,7 +69,7 @@ The format is inspired by Keep a Changelog.
 - Cyclomatic complexity checks for functions and classes
   (`Function too complex`, `Class too complex`).
 - `AsyncFunctionDef` nodes are now analyzed.
-- `SCRUT_FONT` environment variable to request an optional terminal font
+- `AVOUCH_FONT` environment variable to request an optional terminal font
   switch (OSC 50) for the report.
 
 ### Changed

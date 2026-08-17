@@ -1,6 +1,6 @@
 import subprocess
-from scrut.utility.is_generated import is_generated
-from scrut.utility.is_ignored import is_ignored
+from avouch.utility.is_generated import is_generated
+from avouch.utility.is_ignored import is_ignored
 from pathlib import Path
 
 def is_gitrepo():

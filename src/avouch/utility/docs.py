@@ -1,5 +1,5 @@
 """
-Terminal documentation rendered by `scrut --docs`.
+Terminal documentation rendered by `avouch --docs`.
 
 Every statement here describes behavior implemented in this repository.
 """
@@ -8,46 +8,46 @@ import shutil
 import sys
 
 DOCS = """\
-SCRUT - Git-aware AST code review for the Python you changed
+AVOUCH - Git-aware AST code review for the Python you changed
 ===========================================================
 
 WHAT IT DOES
 ------------
-Scrut is a Git-aware static analysis CLI for Python. It asks Git which
+Avouch is a Git-aware static analysis CLI for Python. It asks Git which
 files your next commit will touch, parses each changed .py file with the
 standard ast module, and reports structural problems against limits you
-configure in scrut.toml. No daemon, no network, no path lists to
+configure in avouch.toml. No daemon, no network, no path lists to
 maintain: the review set is the diff.
 
 WORKFLOW
 --------
 Git repository -> changed .py files -> ast.parse -> rules -> findings
 
-1. Load configuration: a scrut.toml in the current directory, if
+1. Load configuration: a avouch.toml in the current directory, if
    present, merged over the built-in defaults
-   (src/scrut/config/loader.py, src/scrut/config/default.py).
+   (src/avouch/config/loader.py, src/avouch/config/default.py).
 2. Verify the working directory is a Git repository
    (git rev-parse --is-inside-work-tree). Otherwise print
    "error: no Git repository found" to stderr and exit 2
    (skipped with --not-git).
-3. Compute the review set (src/scrut/git.py):
+3. Compute the review set (src/avouch/git.py):
    - git diff HEAD --name-only        (staged + unstaged changes)
    - git diff --cached --name-only    (staged changes only, with --staged)
    - git ls-files --others --exclude-standard   (untracked files)
    - keep paths that are existing .py files, not generated files
-     (src/scrut/utility/is_generated.py), and not covered by ignore
-     paths (src/scrut/utility/is_ignored.py).
+     (src/avouch/utility/is_generated.py), and not covered by ignore
+     paths (src/avouch/utility/is_ignored.py).
    If nothing remains, print "error: nothing to review" to stderr and
    exit 2.
 4. Parse each reviewable file with ast.parse and walk the tree once,
-   cached per file (src/scrut/analyzer.py, src/scrut/utility/walk.py).
+   cached per file (src/avouch/analyzer.py, src/avouch/utility/walk.py).
    A file that cannot be read or parsed becomes an ERROR finding; the
    rest of the review continues.
 5. Run the rules enabled by the config against functions, async
    functions, classes, and files (see REVIEW RULES below).
 6. Print the report: human-readable by default (suppressed with
-   --quiet), JSON with --json (src/scrut/report.py).
-7. Exit status: 0 = clean, 1 = findings reported, 2 = Scrut could
+   --quiet), JSON with --json (src/avouch/report.py).
+7. Exit status: 0 = clean, 1 = findings reported, 2 = Avouch could
    not run.
 
 ARCHITECTURE
@@ -55,8 +55,8 @@ ARCHITECTURE
 A local CLI: one Python process, no daemons or network. Modules in
 execution order:
 
-    cli.py (scrut.cli:main)          argparse, orchestration, exit codes
-      |-- config/loader.py           scrut.toml merged over defaults
+    cli.py (avouch.cli:main)          argparse, orchestration, exit codes
+      |-- config/loader.py           avouch.toml merged over defaults
       |-- git.py                     repository check + candidate files
       |   `-- utility/is_generated.py, utility/is_ignored.py  filters
       |-- analyzer.py                read -> ast.parse -> walk cache
@@ -74,36 +74,36 @@ INSTALLATION
 ------------
 Requires Python 3.10+ (ast.Match, tomllib) and git on PATH.
 
-    pip install scrut
+    pip install avouch
 
 or from source:
 
-    git clone https://github.com/mukundzha/scrut.git
-    cd scrut
+    git clone https://github.com/mukundzha/avouch.git
+    cd avouch
     pip install -e .
 
-Both register the `scrut` console script (scrut.cli:main).
+Both register the `avouch` console script (avouch.cli:main).
 
 USAGE
 -----
 Run inside a Git repository after making changes, before pushing:
 
-    scrut
-    scrut --json
-    scrut --ignore-path tests --ignore-path migrations
+    avouch
+    avouch --json
+    avouch --ignore-path tests --ignore-path migrations
 
-Scrut takes no target path argument: the review set is defined by Git,
+Avouch takes no target path argument: the review set is defined by Git,
 not by the command line.
 
-    scrut --help        argparse help for every option
-    scrut --docs        this documentation; exits without reviewing
-    scrut --version     print the version and exit
-    scrut --verbose     step-by-step review details on stderr
-    scrut --quiet       suppress the normal report; errors and exit codes are unchanged
-    scrut --changed     show added/deleted lines of changed files instead of the report
-    scrut --staged      review only files with staged Git changes
-    scrut --all-files   review every eligible Python file, not just the diff
-    scrut --not-git     review every eligible .py file on disk; Git is not required
+    avouch --help        argparse help for every option
+    avouch --docs        this documentation; exits without reviewing
+    avouch --version     print the version and exit
+    avouch --verbose     step-by-step review details on stderr
+    avouch --quiet       suppress the normal report; errors and exit codes are unchanged
+    avouch --changed     show added/deleted lines of changed files instead of the report
+    avouch --staged      review only files with staged Git changes
+    avouch --all-files   review every eligible Python file, not just the diff
+    avouch --not-git     review every eligible .py file on disk; Git is not required
 
 Only one of --changed, --staged, and --all-files may be given; the
 output flags --json, --verbose, and --quiet combine with any scope.
@@ -112,7 +112,7 @@ Git history.
 
 CONFIGURATION
 -------------
-Configuration lives in scrut.toml in the current working directory
+Configuration lives in avouch.toml in the current working directory
 (no upward search). It is optional and partial: any subset is merged
 over the built-in defaults. A malformed file raises instead of being
 silently ignored.
@@ -126,7 +126,7 @@ Sections:
 Ignore paths match whole path components: "tests" skips tests/ and
 tests/x.py but not tests.py. A "." ignores the whole repository.
 
-[limits] keys with their defaults (src/scrut/config/default.py):
+[limits] keys with their defaults (src/avouch/config/default.py):
 
     max_parameters            5    parameters per function (SCR014)
     max_nesting               5    block nesting depth (SCR013)
@@ -144,7 +144,7 @@ tests/x.py but not tests.py. A "." ignores the whole repository.
 A rule whose limit key is missing falls back to a default hardcoded in
 its own module, so a partial [limits] never turns a rule off. Every
 limit key above is present in DEFAULT_LIMITS, so all of them are tunable
-from scrut.toml.
+from avouch.toml.
 
 [rules] toggles (all default true):
 
@@ -156,16 +156,16 @@ from scrut.toml.
     max_file_lines              max_function_lines
     max_nesting                 max_parameters
     nested_function             max_return_statements
-    max_complexity
+    mutable_default_args        max_complexity
 
 Setting a toggle to false disables that rule's findings.
 
 Observe whether the file was loaded with --verbose: the first
-diagnostics line prints "config: scrut.toml, N ignore path(s)" (or
-"config: defaults (no scrut.toml), 0 ignore path(s)" without a file).
+diagnostics line prints "config: avouch.toml, N ignore path(s)" (or
+"config: defaults (no avouch.toml), 0 ignore path(s)" without a file).
 
 Malformed TOML or a non-list ignore_paths prints
-"error: invalid scrut.toml configuration: ..." and exits 2. Unknown
+"error: invalid avouch.toml configuration: ..." and exits 2. Unknown
 keys are accepted and ignored silently - a typo is silently
 ineffective. Limit values are not type-checked: a non-numeric limit
 fails at analysis time with an internal error (exit 2).
@@ -176,7 +176,7 @@ mode (--changed, --staged, --all-files) and output mode (--json,
 --quiet, --verbose). Severity is not configurable: rule findings are
 WARNING; ERROR is reserved for files that cannot be read or parsed.
 
-Example - the exact scrut.toml this repository lives by:
+Example - the exact avouch.toml this repository lives by:
 
     ignore_paths = ["tests"]
 
@@ -206,6 +206,7 @@ Example - the exact scrut.toml this repository lives by:
     max_return_statements = true
     max_lambda_nodes = true
     max_large_comprehensions = true
+    mutable_default_args = true
 
 REVIEW RULES
 ------------
@@ -288,6 +289,16 @@ that cannot be read or parsed. Rules with a threshold render
             function's total.
             scope: functions.
 
+    SCR017  mutable default argument
+            A default parameter value that is a mutable literal ([],
+            {}, {..}) or a mutable constructor call (list(), dict(),
+            set(), bytearray(), defaultdict(), OrderedDict()).
+            Defaults are evaluated once at definition time, so the
+            same object is shared across every call that omits the
+            argument. Use None and construct the object inside the
+            function instead.
+            scope: functions.
+
     (no id) function or class too complex
             McCabe cyclomatic complexity: base 1, plus 1 for each
             if/for/async for/while/try/except handler/match/ternary/
@@ -301,7 +312,7 @@ FINDINGS AND OUTPUT
 -------------------
 Human report (colors only when stdout is a TTY):
 
-    SCRUT · 2 FILES · 4 WARN
+    AVOUCH · 2 FILES · 4 WARN
 
     src/app.py:1: SCR002: Bare except detected. Catch a specific
     exception instead, e.g. except ValueError:.
@@ -337,14 +348,14 @@ count can exceed the row count when two rule ids map to the same
 detection (SCR004/SCR006). The BY RULE summary lists deduplicated
 counts per rule, most common first, and appears only when findings
 exist. The passing grid collapses to at most a few lines, with a
-"[+N more]" note when it overflows. SCRUT_FONT=name is an opt-in
+"[+N more]" note when it overflows. AVOUCH_FONT=name is an opt-in
 OSC 50 font switch honored only by capable terminals.
 
 JSON (--json) prints a single document on stdout:
 
     {
       "version": 1,
-      "tool": "scrut",
+      "tool": "avouch",
       "violations": [
         {
           "rule": "SCR014",
@@ -378,32 +389,32 @@ diagnostics mixed in. Exit codes are the same in both modes: 0 clean,
 EXAMPLES
 --------
     # before pushing, inside the repository
-    scrut
+    avouch
 
     # JSON for CI or tooling
-    scrut --json
+    avouch --json
 
     # skip a path, e.g. a tests directory
-    scrut --ignore-path tests
+    avouch --ignore-path tests
 
     # outside a Git repository
-    scrut
+    avouch
     error: no Git repository found
-    hint: run Scrut from inside a Git repository, or use --not-git to review files without Git   (exit 2)
+    hint: run Avouch from inside a Git repository, or use --not-git to review files without Git   (exit 2)
 
     # no changed Python files in a clean checkout (as in CI)
-    scrut
+    avouch
     error: nothing to review
     hint: nothing changed vs HEAD (CI checkouts are clean); use --all-files for a full review   (exit 2)
 
     # a clean run
-    scrut
+    avouch
     All clean.                            (exit 0)
 
 PROJECT
 -------
-Source:  https://github.com/mukundzha/scrut
-Issues:  https://github.com/mukundzha/scrut/issues
+Source:  https://github.com/mukundzha/avouch
+Issues:  https://github.com/mukundzha/avouch/issues
 License: MIT (LICENSE)
 Runtime: Python standard library (ast, tomllib) plus three git
          subprocess calls; pyproject.toml declares rich>=14.0.0, which

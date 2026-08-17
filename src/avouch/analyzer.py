@@ -1,24 +1,25 @@
-from scrut.rules.complexity import calculate_complexity
-from scrut.rules.boolean_complexity import analyze as analyze_boolean_complexity
-from scrut.rules.detect_duplicateb import analyze as analyze_duplicateb
-from scrut.rules.bare_except import analyze as analyze_bare_except
-from scrut.rules.if_else_chain import analyze as analyze_if_else_chain
-from scrut.rules.empty_except import analyze as analyze_empty_except
-from scrut.rules.async_without_await import analyze as analyze_async_without_await
-from scrut.rules.detect_large_comprehensions import analyze as analyze_large_comprehensions
-from scrut.rules.local_variables import analyze as analyze_local_variables
-from scrut.rules.nested_function import analyze as analyze_nested_function
-from scrut.rules.return_statements import analyze as analyze_return_statements
-from scrut.rules.large_lambda import analyze as analyze_large_lambda
-from scrut.rules.max_function_lines import analyze as analyze_max_function_lines
-from scrut.rules.max_parameters import analyze as analyze_max_parameters
-from scrut.rules.max_nesting import analyze as analyze_max_nesting, get_depth, BLOCK_NODES
-from scrut.rules.max_class_lines import analyze as analyze_max_class_lines
-from scrut.rules.max_file_lines import analyze as analyze_max_file_lines
+from avouch.rules.complexity import calculate_complexity
+from avouch.rules.boolean_complexity import analyze as analyze_boolean_complexity
+from avouch.rules.detect_duplicateb import analyze as analyze_duplicateb
+from avouch.rules.bare_except import analyze as analyze_bare_except
+from avouch.rules.if_else_chain import analyze as analyze_if_else_chain
+from avouch.rules.empty_except import analyze as analyze_empty_except
+from avouch.rules.async_without_await import analyze as analyze_async_without_await
+from avouch.rules.detect_large_comprehensions import analyze as analyze_large_comprehensions
+from avouch.rules.local_variables import analyze as analyze_local_variables
+from avouch.rules.nested_function import analyze as analyze_nested_function
+from avouch.rules.return_statements import analyze as analyze_return_statements
+from avouch.rules.large_lambda import analyze as analyze_large_lambda
+from avouch.rules.max_function_lines import analyze as analyze_max_function_lines
+from avouch.rules.max_parameters import analyze as analyze_max_parameters
+from avouch.rules.max_nesting import analyze as analyze_max_nesting, get_depth, BLOCK_NODES
+from avouch.rules.max_class_lines import analyze as analyze_max_class_lines
+from avouch.rules.max_file_lines import analyze as analyze_max_file_lines
+from avouch.rules.mutable_default_args import analyze as analyze_mutable_default_args
 
 import ast
 
-from scrut.utility.walk import reset_walk_cache
+from avouch.utility.walk import reset_walk_cache
 
 
 def read_file(file_path):
@@ -103,6 +104,8 @@ def _analyze_func(node, file_path, limits, rules):
         issues.extend(analyze_max_nesting(node, limits))
     if rules["bare_except"]:
         issues.extend(analyze_bare_except(node, limits))
+    if rules["mutable_default_args"]:
+        issues.extend(analyze_mutable_default_args(node, limits))
 
     report = {
         "name": node.name,

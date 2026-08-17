@@ -5,15 +5,15 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from scrut.analyzer import analyze_file, get_depth, read_file
-from scrut.git import get_changed_files, get_staged_files, get_reviewable_files, is_gitrepo
-from scrut.report import generate_report
-from scrut.cli import main, SUCCESS, VIOLATIONS_FOUND, ERROR
-from scrut.config.default import DEFAULT_LIMITS
-from scrut.config.loader import load_config, merge_limits, DEFAULT_RULES, merge_ignore_paths
-from scrut.rules.complexity import calculate_complexity
-from scrut.rules.boolean_complexity import analyze, count_boolean_conditions
-from scrut.utility.is_ignored import is_ignored
+from avouch.analyzer import analyze_file, get_depth, read_file
+from avouch.git import get_changed_files, get_staged_files, get_reviewable_files, is_gitrepo
+from avouch.report import generate_report
+from avouch.cli import main, SUCCESS, VIOLATIONS_FOUND, ERROR
+from avouch.config.default import DEFAULT_LIMITS
+from avouch.config.loader import load_config, merge_limits, DEFAULT_RULES, merge_ignore_paths
+from avouch.rules.complexity import calculate_complexity
+from avouch.rules.boolean_complexity import analyze, count_boolean_conditions
+from avouch.utility.is_ignored import is_ignored
 
 def test_main_with_real_git_repo(tmp_path, monkeypatch, capsys):
 
@@ -57,7 +57,7 @@ def test_main_ignores_path_in_real_git_repo(tmp_path, monkeypatch, capsys):
     git("-c", "commit.gpgsign=false", "commit", "-q", "-m", "initial")
 
     body = "".join(f"    if x{i}:\n        pass\n" for i in range(10))
-    _scrut_toml(tmp_path)
+    _avouch_toml(tmp_path)
     (tmp_path / "app.py").write_text("def f(x):\n" + body)
     (tmp_path / "tests" / "bad.py").write_text("def t(x):\n" + body)
     git("add", "-A")
@@ -76,13 +76,13 @@ def test_main_ignores_path_in_real_git_repo(tmp_path, monkeypatch, capsys):
 def test_main_returns_1_on_violations(tmp_path, monkeypatch, capsys):
 
     body = "".join(f"    if x{i}:\n        pass\n" for i in range(10))
-    _scrut_toml(tmp_path)
+    _avouch_toml(tmp_path)
     bad = tmp_path / "bad.py"
     bad.write_text("def f(x):\n" + body)
 
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(
-        "scrut.git.subprocess.run",
+        "avouch.git.subprocess.run",
         lambda *a, **k: Mock(returncode=0, stdout="bad.py\n"),
     )
 
@@ -90,34 +90,34 @@ def test_main_returns_1_on_violations(tmp_path, monkeypatch, capsys):
     assert "Function too complex" in capsys.readouterr().out
 
 
-@patch("scrut.cli.is_gitrepo", return_value=False)
+@patch("avouch.cli.is_gitrepo", return_value=False)
 def test_main_returns_2_on_error(mock_is_gitrepo, capsys):
 
     assert main([]) == ERROR
     assert "no Git repository found" in capsys.readouterr().err
 
 
-@patch("scrut.cli.is_gitrepo")
+@patch("avouch.cli.is_gitrepo")
 def test_main_docs_prints_without_review(mock_is_gitrepo, capsys):
 
     assert main(["--docs"]) == SUCCESS
 
     out = capsys.readouterr().out
 
-    assert "SCRUT" in out
+    assert "AVOUCH" in out
     assert "REVIEW RULES" in out
     assert "SCR014" in out
     assert not mock_is_gitrepo.called
 
 
-@patch("scrut.cli.is_gitrepo", return_value=False)
+@patch("avouch.cli.is_gitrepo", return_value=False)
 def test_main_docs_works_outside_git_repo(mock_is_gitrepo, capsys):
 
     assert main(["--docs"]) == SUCCESS
 
     out = capsys.readouterr().out
 
-    assert "SCRUT" in out
+    assert "AVOUCH" in out
     assert not mock_is_gitrepo.called
 
 
@@ -125,7 +125,7 @@ def _main_git(tmp_path, monkeypatch, stdout):
 
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(
-        "scrut.git.subprocess.run",
+        "avouch.git.subprocess.run",
         Mock(
             side_effect=[
                 Mock(returncode=0, stdout=""),
@@ -136,9 +136,9 @@ def _main_git(tmp_path, monkeypatch, stdout):
     )
 
 
-def _scrut_toml(tmp_path, extra=""):
+def _avouch_toml(tmp_path, extra=""):
 
-    (tmp_path / "scrut.toml").write_text(extra + "[limits]\nmax_complexity = 10\n")
+    (tmp_path / "avouch.toml").write_text(extra + "[limits]\nmax_complexity = 10\n")
 
 
 def test_main_verbose_reports_diagnostics(tmp_path, monkeypatch, capsys):
@@ -167,7 +167,7 @@ def test_main_verbose_quiet_when_nothing_to_review(tmp_path, monkeypatch, capsys
 
     assert captured.out == ""
     assert captured.err == (
-        "scrut: candidate files: 0, reviewable: 0\n"
+        "avouch: candidate files: 0, reviewable: 0\n"
         "error: nothing to review\n"
         "hint: nothing changed vs HEAD (CI checkouts are clean); use --all-files for a full review\n"
     )
@@ -190,7 +190,7 @@ def test_main_verbose_keeps_normal_mode_quiet(tmp_path, monkeypatch, capsys):
 def test_main_verbose_findings_unchanged(tmp_path, monkeypatch, capsys):
 
     body = "".join(f"    if x{i}:\n        pass\n" for i in range(10))
-    _scrut_toml(tmp_path)
+    _avouch_toml(tmp_path)
     (tmp_path / "bad.py").write_text("def f(x):\n" + body)
 
     monkeypatch.chdir(tmp_path)
@@ -203,7 +203,7 @@ def test_main_verbose_findings_unchanged(tmp_path, monkeypatch, capsys):
             order["call"] += 1
             return Mock(returncode=0, stdout="bad.py\n" if order["call"] == 3 else "")
 
-        monkeypatch.setattr("scrut.git.subprocess.run", fake_run)
+        monkeypatch.setattr("avouch.git.subprocess.run", fake_run)
 
         return main(mode)
 
@@ -221,7 +221,7 @@ def test_main_verbose_findings_unchanged(tmp_path, monkeypatch, capsys):
 def test_main_changed_reviews_same_files_as_default(tmp_path, monkeypatch, capsys):
 
     body = "".join(f"    if x{i}:\n        pass\n" for i in range(10))
-    _scrut_toml(tmp_path)
+    _avouch_toml(tmp_path)
     (tmp_path / "bad.py").write_text("def f(x):\n" + body)
 
     monkeypatch.chdir(tmp_path)
@@ -234,7 +234,7 @@ def test_main_changed_reviews_same_files_as_default(tmp_path, monkeypatch, capsy
             order["call"] += 1
             return Mock(returncode=0, stdout="bad.py\n" if order["call"] == 3 else "")
 
-        monkeypatch.setattr("scrut.git.subprocess.run", fake_run)
+        monkeypatch.setattr("avouch.git.subprocess.run", fake_run)
 
         return main(mode)
 
@@ -273,7 +273,7 @@ def test_main_changed_no_changed_files(tmp_path, monkeypatch, capsys):
     assert "nothing to review" in capsys.readouterr().err
 
 
-@patch("scrut.cli.is_gitrepo", return_value=False)
+@patch("avouch.cli.is_gitrepo", return_value=False)
 def test_main_changed_outside_git_repo(mock_is_gitrepo, capsys):
 
     assert main(["--changed"]) == ERROR
@@ -284,7 +284,7 @@ def _main_staged(tmp_path, monkeypatch, stdout):
 
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(
-        "scrut.git.subprocess.run",
+        "avouch.git.subprocess.run",
         Mock(
             side_effect=[
                 Mock(returncode=0, stdout=""),
@@ -329,7 +329,7 @@ def test_main_staged_no_staged_files(tmp_path, monkeypatch, capsys):
     assert "nothing to review" in capsys.readouterr().err
 
 
-@patch("scrut.cli.is_gitrepo", return_value=False)
+@patch("avouch.cli.is_gitrepo", return_value=False)
 def test_main_staged_outside_git_repo(mock_is_gitrepo, capsys):
 
     assert main(["--staged"]) == ERROR
@@ -374,7 +374,7 @@ def test_main_staged_respects_ignore_paths(tmp_path, monkeypatch, capsys):
 
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(
-        "scrut.git.subprocess.run",
+        "avouch.git.subprocess.run",
         Mock(
             side_effect=[
                 Mock(returncode=0, stdout=""),
@@ -393,7 +393,7 @@ def test_main_staged_respects_ignore_paths(tmp_path, monkeypatch, capsys):
 
 def test_main_invalid_config_reports_error(tmp_path, monkeypatch, capsys):
 
-    (tmp_path / "scrut.toml").write_text("[limits\n")
+    (tmp_path / "avouch.toml").write_text("[limits\n")
 
     monkeypatch.chdir(tmp_path)
 
@@ -401,7 +401,7 @@ def test_main_invalid_config_reports_error(tmp_path, monkeypatch, capsys):
 
     captured = capsys.readouterr()
 
-    assert "invalid scrut.toml configuration" in captured.err
+    assert "invalid avouch.toml configuration" in captured.err
     assert "hint: check the [limits], [rules], and ignore_paths sections" in captured.err
 
 
@@ -419,7 +419,7 @@ def test_main_quiet_clean_suppresses_output(tmp_path, monkeypatch, capsys):
 def test_main_quiet_same_exit_code_as_normal(tmp_path, monkeypatch, capsys):
 
     body = "".join(f"    if x{i}:\n        pass\n" for i in range(10))
-    _scrut_toml(tmp_path)
+    _avouch_toml(tmp_path)
     (tmp_path / "bad.py").write_text("def f(x):\n" + body)
 
     monkeypatch.chdir(tmp_path)
@@ -432,7 +432,7 @@ def test_main_quiet_same_exit_code_as_normal(tmp_path, monkeypatch, capsys):
             order["call"] += 1
             return Mock(returncode=0, stdout="bad.py\n" if order["call"] == 3 else "")
 
-        monkeypatch.setattr("scrut.git.subprocess.run", fake_run)
+        monkeypatch.setattr("avouch.git.subprocess.run", fake_run)
 
         return main(mode)
 
@@ -455,7 +455,7 @@ def test_main_quiet_errors_remain_visible(tmp_path, monkeypatch, capsys):
     assert "nothing to review" in captured.err
 
 
-@patch("scrut.cli.is_gitrepo", return_value=False)
+@patch("avouch.cli.is_gitrepo", return_value=False)
 def test_main_quiet_error_outside_git_repo(mock_is_gitrepo, capsys):
 
     assert main(["--quiet"]) == ERROR
@@ -465,12 +465,12 @@ def test_main_quiet_error_outside_git_repo(mock_is_gitrepo, capsys):
 def test_main_quiet_json_still_valid(tmp_path, monkeypatch, capsys):
 
     body = "".join(f"    if x{i}:\n        pass\n" for i in range(10))
-    _scrut_toml(tmp_path)
+    _avouch_toml(tmp_path)
     (tmp_path / "bad.py").write_text("def f(x):\n" + body)
 
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(
-        "scrut.git.subprocess.run",
+        "avouch.git.subprocess.run",
         Mock(
             side_effect=[
                 Mock(returncode=0, stdout=""),
@@ -529,7 +529,7 @@ def test_main_quiet_staged(tmp_path, monkeypatch, capsys):
 
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(
-        "scrut.git.subprocess.run",
+        "avouch.git.subprocess.run",
         Mock(
             side_effect=[
                 Mock(returncode=0, stdout=""),
@@ -557,14 +557,14 @@ def test_main_version_prints_version(capsys):
         main(["--version"])
 
     assert exc.value.code == 0
-    assert "scrut 0.3.1" in capsys.readouterr().out
+    assert "avouch 0.3.2" in capsys.readouterr().out
 
 
 def _main_all_files(tmp_path, monkeypatch, stdout):
 
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(
-        "scrut.git.subprocess.run",
+        "avouch.git.subprocess.run",
         Mock(
             side_effect=[
                 Mock(returncode=0, stdout=""),
@@ -627,7 +627,7 @@ def _main_json(tmp_path, monkeypatch, stdout):
 
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(
-        "scrut.git.subprocess.run",
+        "avouch.git.subprocess.run",
         Mock(
             side_effect=[
                 Mock(returncode=0, stdout=""),
@@ -661,7 +661,7 @@ def test_main_json_clean(tmp_path, monkeypatch, capsys):
 def test_main_json_single_violation(tmp_path, monkeypatch, capsys):
 
     body = "".join(f"    if x{i}:\n        pass\n" for i in range(10))
-    _scrut_toml(tmp_path)
+    _avouch_toml(tmp_path)
     (tmp_path / "bad.py").write_text("def f(x):\n" + body)
 
     assert _main_json(tmp_path, monkeypatch, "bad.py\n") == VIOLATIONS_FOUND
@@ -679,7 +679,7 @@ def test_main_json_single_violation(tmp_path, monkeypatch, capsys):
 
 def test_main_json_multiple_violations_one_file(tmp_path, monkeypatch, capsys):
 
-    (tmp_path / "scrut.toml").write_text(
+    (tmp_path / "avouch.toml").write_text(
         "[limits]\nmax_parameters = 1\nmax_function_lines = 1\n"
     )
     (tmp_path / "a.py").write_text("def f(a, b):\n    pass\n")
@@ -696,7 +696,7 @@ def test_main_json_multiple_violations_one_file(tmp_path, monkeypatch, capsys):
 
 def test_main_json_multiple_files(tmp_path, monkeypatch, capsys):
 
-    (tmp_path / "scrut.toml").write_text("[limits]\nmax_parameters = 1\n")
+    (tmp_path / "avouch.toml").write_text("[limits]\nmax_parameters = 1\n")
     (tmp_path / "a.py").write_text("def f(a, b):\n    pass\n")
     (tmp_path / "b.py").write_text("def g(c, d):\n    pass\n")
 
@@ -714,7 +714,7 @@ def test_main_json_multiple_files(tmp_path, monkeypatch, capsys):
     }
 
 
-@patch("scrut.cli.is_gitrepo", return_value=False)
+@patch("avouch.cli.is_gitrepo", return_value=False)
 def test_main_json_error_exit_code(mock_is_gitrepo, capsys):
 
     assert main(["--json"]) == ERROR
@@ -728,12 +728,12 @@ def test_main_json_error_exit_code(mock_is_gitrepo, capsys):
 def test_main_changed_json_is_machine_readable(tmp_path, monkeypatch, capsys):
 
     body = "".join(f"    if x{i}:\n        pass\n" for i in range(10))
-    _scrut_toml(tmp_path)
+    _avouch_toml(tmp_path)
     (tmp_path / "bad.py").write_text("def f(x):\n" + body)
 
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(
-        "scrut.git.subprocess.run",
+        "avouch.git.subprocess.run",
         Mock(
             side_effect=[
                 Mock(returncode=0, stdout=""),
@@ -755,12 +755,12 @@ def test_main_changed_json_is_machine_readable(tmp_path, monkeypatch, capsys):
 def test_main_staged_json_is_machine_readable(tmp_path, monkeypatch, capsys):
 
     body = "".join(f"    if x{i}:\n        pass\n" for i in range(10))
-    _scrut_toml(tmp_path)
+    _avouch_toml(tmp_path)
     (tmp_path / "bad.py").write_text("def f(x):\n" + body)
 
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(
-        "scrut.git.subprocess.run",
+        "avouch.git.subprocess.run",
         Mock(
             side_effect=[
                 Mock(returncode=0, stdout=""),
@@ -780,7 +780,7 @@ def test_main_staged_json_is_machine_readable(tmp_path, monkeypatch, capsys):
 def test_main_all_files_json_is_machine_readable(tmp_path, monkeypatch, capsys):
 
     body = "".join(f"    if x{i}:\n        pass\n" for i in range(10))
-    _scrut_toml(tmp_path)
+    _avouch_toml(tmp_path)
     (tmp_path / "bad.py").write_text("def f(x):\n" + body)
 
     _main_all_files(tmp_path, monkeypatch, "bad.py\n")
@@ -796,7 +796,7 @@ def test_main_all_files_json_is_machine_readable(tmp_path, monkeypatch, capsys):
 def test_main_json_contract_fields(tmp_path, monkeypatch, capsys):
 
     body = "".join(f"    if x{i}:\n        pass\n" for i in range(10))
-    _scrut_toml(tmp_path)
+    _avouch_toml(tmp_path)
     (tmp_path / "bad.py").write_text("def f(x):\n" + body)
 
     assert _main_json(tmp_path, monkeypatch, "bad.py\n") == VIOLATIONS_FOUND
@@ -804,7 +804,7 @@ def test_main_json_contract_fields(tmp_path, monkeypatch, capsys):
     data = json.loads(capsys.readouterr().out)
 
     assert data["version"] == 1
-    assert data["tool"] == "scrut"
+    assert data["tool"] == "avouch"
     assert data["violations"][0]["line"] == 1
 
 
@@ -822,7 +822,7 @@ def test_main_json_syntax_error_reports_line(tmp_path, monkeypatch, capsys):
 
 def test_main_json_file_finding_line_is_null(tmp_path, monkeypatch, capsys):
 
-    (tmp_path / "scrut.toml").write_text("[limits]\nmax_file_lines = 1\n")
+    (tmp_path / "avouch.toml").write_text("[limits]\nmax_file_lines = 1\n")
     (tmp_path / "a.py").write_text("def f(a, b):\n    pass\n")
 
     assert _main_json(tmp_path, monkeypatch, "a.py\n") == VIOLATIONS_FOUND
@@ -837,7 +837,7 @@ def test_main_json_file_finding_line_is_null(tmp_path, monkeypatch, capsys):
 def test_main_json_deterministic(tmp_path, monkeypatch, capsys):
 
     body = "".join(f"    if x{i}:\n        pass\n" for i in range(10))
-    _scrut_toml(tmp_path)
+    _avouch_toml(tmp_path)
     (tmp_path / "bad.py").write_text("def f(x):\n" + body)
 
     assert _main_json(tmp_path, monkeypatch, "bad.py\n") == VIOLATIONS_FOUND
@@ -855,7 +855,7 @@ def test_main_unreadable_file_reports_reason(tmp_path, monkeypatch, capsys):
 
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(
-        "scrut.git.subprocess.run",
+        "avouch.git.subprocess.run",
         Mock(
             side_effect=[
                 Mock(returncode=0, stdout=""),
@@ -879,7 +879,7 @@ def test_main_syntax_error_reports_detail(tmp_path, monkeypatch, capsys):
 
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(
-        "scrut.git.subprocess.run",
+        "avouch.git.subprocess.run",
         Mock(
             side_effect=[
                 Mock(returncode=0, stdout=""),
@@ -904,7 +904,7 @@ def test_main_non_utf8_file_reports_reason(tmp_path, monkeypatch, capsys):
 
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(
-        "scrut.git.subprocess.run",
+        "avouch.git.subprocess.run",
         Mock(
             side_effect=[
                 Mock(returncode=0, stdout=""),
@@ -927,10 +927,10 @@ def test_main_internal_error_reports_concise_diagnostic(tmp_path, monkeypatch, c
 
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(
-        "scrut.git.subprocess.run",
+        "avouch.git.subprocess.run",
         Mock(side_effect=[Mock(returncode=0, stdout="")]),
     )
-    monkeypatch.setattr("scrut.cli.get_changed_files", Mock(side_effect=RuntimeError("boom")))
+    monkeypatch.setattr("avouch.cli.get_changed_files", Mock(side_effect=RuntimeError("boom")))
 
     assert main([]) == ERROR
 
@@ -945,10 +945,10 @@ def test_main_internal_error_traceback_under_verbose(tmp_path, monkeypatch, caps
 
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(
-        "scrut.git.subprocess.run",
+        "avouch.git.subprocess.run",
         Mock(side_effect=[Mock(returncode=0, stdout="")]),
     )
-    monkeypatch.setattr("scrut.cli.get_changed_files", Mock(side_effect=RuntimeError("boom")))
+    monkeypatch.setattr("avouch.cli.get_changed_files", Mock(side_effect=RuntimeError("boom")))
 
     assert main(["--verbose"]) == ERROR
 
@@ -961,12 +961,12 @@ def test_main_internal_error_traceback_under_verbose(tmp_path, monkeypatch, caps
 def test_main_verbose_json_stdout_stays_clean(tmp_path, monkeypatch, capsys):
 
     body = "".join(f"    if x{i}:\n        pass\n" for i in range(10))
-    _scrut_toml(tmp_path)
+    _avouch_toml(tmp_path)
     (tmp_path / "bad.py").write_text("def f(x):\n" + body)
 
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(
-        "scrut.git.subprocess.run",
+        "avouch.git.subprocess.run",
         Mock(
             side_effect=[
                 Mock(returncode=0, stdout=""),
@@ -993,7 +993,7 @@ def test_main_verbose_reports_ignore_paths_and_skips(tmp_path, monkeypatch, caps
 
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(
-        "scrut.git.subprocess.run",
+        "avouch.git.subprocess.run",
         Mock(
             side_effect=[
                 Mock(returncode=0, stdout=""),
@@ -1063,7 +1063,7 @@ def test_main_not_git_reviews_python_files_in_plain_directory(tmp_path, monkeypa
 def test_main_not_git_reports_findings(tmp_path, monkeypatch, capsys):
 
     body = "".join(f"    if x{i}:\n        pass\n" for i in range(10))
-    _scrut_toml(tmp_path)
+    _avouch_toml(tmp_path)
     (tmp_path / "bad.py").write_text("def f(x):\n" + body)
 
     monkeypatch.chdir(tmp_path)
@@ -1090,7 +1090,7 @@ def test_main_not_git_discovers_nested_python_files(tmp_path, monkeypatch, capsy
 def test_main_not_git_skips_env_and_cache_directories(tmp_path, monkeypatch, capsys):
 
     body = "".join(f"    if x{i}:\n        pass\n" for i in range(10))
-    _scrut_toml(tmp_path)
+    _avouch_toml(tmp_path)
     (tmp_path / ".venv").mkdir()
     (tmp_path / ".venv" / "lib.py").write_text("def f(x):\n" + body)
     (tmp_path / "__pycache__").mkdir()
@@ -1113,7 +1113,7 @@ def test_main_not_git_skips_env_and_cache_directories(tmp_path, monkeypatch, cap
 def test_main_not_git_respects_ignore_path_flag(tmp_path, monkeypatch, capsys):
 
     body = "".join(f"    if x{i}:\n        pass\n" for i in range(10))
-    _scrut_toml(tmp_path)
+    _avouch_toml(tmp_path)
     (tmp_path / "tests").mkdir()
     (tmp_path / "app.py").write_text("def f(x):\n" + body)
     (tmp_path / "tests" / "bad.py").write_text("def f(x):\n" + body)
@@ -1130,7 +1130,7 @@ def test_main_not_git_respects_ignore_path_flag(tmp_path, monkeypatch, capsys):
 
 def test_main_not_git_respects_config_ignore_paths(tmp_path, monkeypatch, capsys):
 
-    _scrut_toml(tmp_path, 'ignore_paths = ["tests"]\n')
+    _avouch_toml(tmp_path, 'ignore_paths = ["tests"]\n')
     body = "".join(f"    if x{i}:\n        pass\n" for i in range(10))
     (tmp_path / "tests").mkdir()
     (tmp_path / "app.py").write_text("def f(x):\n" + body)
@@ -1149,7 +1149,7 @@ def test_main_not_git_respects_config_ignore_paths(tmp_path, monkeypatch, capsys
 def test_main_not_git_json_uses_existing_schema(tmp_path, monkeypatch, capsys):
 
     body = "".join(f"    if x{i}:\n        pass\n" for i in range(10))
-    _scrut_toml(tmp_path)
+    _avouch_toml(tmp_path)
     (tmp_path / "bad.py").write_text("def f(x):\n" + body)
     (tmp_path / "good.py").write_text("def ok():\n    pass\n")
 
@@ -1160,7 +1160,7 @@ def test_main_not_git_json_uses_existing_schema(tmp_path, monkeypatch, capsys):
     data = json.loads(capsys.readouterr().out)
 
     assert data["version"] == 1
-    assert data["tool"] == "scrut"
+    assert data["tool"] == "avouch"
     assert data["violations"][0]["file"] == "bad.py"
     assert data["summary"] == {
         "total": 1,
@@ -1277,3 +1277,65 @@ def test_main_help_lists_not_git(capsys):
         main(["--help"])
 
     assert "--not-git" in capsys.readouterr().out
+
+
+def test_main_mutable_default_args_reports_finding(tmp_path, monkeypatch, capsys):
+
+    (tmp_path / "a.py").write_text("def f(items=[]):\n    return items\n")
+
+    _main_git(tmp_path, monkeypatch, "a.py\n")
+
+    assert main([]) == VIOLATIONS_FOUND
+
+    out = capsys.readouterr().out
+
+    assert "SCR017" in out
+    assert "Mutable default argument detected" in out
+
+
+def test_main_mutable_default_args_immutable_defaults_clean(tmp_path, monkeypatch, capsys):
+
+    (tmp_path / "a.py").write_text(
+        "def f(a=None, b='', c=0, d=(1, 2), *, e=frozenset()):\n"
+        "    return a\n"
+    )
+
+    _main_git(tmp_path, monkeypatch, "a.py\n")
+
+    assert main([]) == SUCCESS
+
+    assert "All clean." in capsys.readouterr().out
+
+
+def test_main_mutable_default_args_keyword_only_default(tmp_path, monkeypatch, capsys):
+
+    (tmp_path / "a.py").write_text("def f(*, opts={}):\n    return opts\n")
+
+    assert _main_json(tmp_path, monkeypatch, "a.py\n") == VIOLATIONS_FOUND
+
+    violation = json.loads(capsys.readouterr().out)["violations"][0]
+
+    assert violation["rule"] == "SCR017"
+    assert violation["severity"] == "WARNING"
+    assert violation["file"] == "a.py"
+    assert violation["name"] == "f"
+    assert violation["kind"] == "func"
+    assert violation["line"] == 1
+
+
+def test_main_mutable_default_args_nested_function_flagged_once(tmp_path, monkeypatch, capsys):
+
+    (tmp_path / "a.py").write_text(
+        "def outer():\n"
+        "    def inner(x=[]):\n"
+        "        return x\n"
+    )
+
+    assert _main_json(tmp_path, monkeypatch, "a.py\n") == VIOLATIONS_FOUND
+
+    violations = json.loads(capsys.readouterr().out)["violations"]
+
+    scr017 = [v for v in violations if v["rule"] == "SCR017"]
+
+    assert len(scr017) == 1
+    assert scr017[0]["name"] == "inner"

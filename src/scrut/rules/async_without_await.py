@@ -1,6 +1,6 @@
 import ast
 
-from avouch.utility.walk import walk
+from scrut.utility.walk import walk
 
 
 def analyze(function_node, limits):
@@ -9,7 +9,6 @@ def analyze(function_node, limits):
 
     if any(isinstance(node, ast.Await) for node in walk(function_node)):
         return issues
-
     issues.append(
         {
             "rule": "SCR001",

@@ -1,5 +1,5 @@
 """
-Default configuration values for Scrut.
+Default configuration values for Avouch.
 """
 
 from pathlib import Path
@@ -25,7 +25,7 @@ def load_limits():
 
     limits = DEFAULT_LIMITS.copy()
 
-    config_path = Path("scrut.toml")
+    config_path = Path("avouch.toml")
 
     if not config_path.exists():
         return limits

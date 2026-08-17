@@ -4,21 +4,21 @@ import sys
 import traceback
 from pathlib import Path
 
-from scrut.config.loader import DEFAULT_RULES, load_config
-from scrut.config.default import DEFAULT_LIMITS
-from scrut.analyzer import analyze_file
-from scrut.report import generate_report, render_diff_view, render_json, vlog
-from scrut.utility.docs import render_docs
-from scrut.git import is_gitrepo, get_changed_files, get_staged_files, get_all_files, get_all_files_on_disk, get_reviewable_files
+from avouch.config.loader import DEFAULT_RULES, load_config
+from avouch.config.default import DEFAULT_LIMITS
+from avouch.analyzer import analyze_file
+from avouch.report import generate_report, render_diff_view, render_json, vlog
+from avouch.utility.docs import render_docs
+from avouch.git import is_gitrepo, get_changed_files, get_staged_files, get_all_files, get_all_files_on_disk, get_reviewable_files
 
 SUCCESS = 0
 VIOLATIONS_FOUND = 1
 ERROR = 2
 
 try:
-    SCRUT_VERSION = importlib.metadata.version("scrut")
+    AVOUCH_VERSION = importlib.metadata.version("avouch")
 except importlib.metadata.PackageNotFoundError:
-    SCRUT_VERSION = "0.3.2"
+    AVOUCH_VERSION = "0.3.2"
 
 
 def _nothing_to_review_hint(args, candidate_files):
@@ -46,11 +46,11 @@ def main(argv=None):
 def _main(argv=None):
 
     parser = argparse.ArgumentParser(
-        prog="scrut",
+        prog="avouch",
         epilog=(
-            "By default scrut reviews Python files changed vs Git HEAD, "
+            "By default avouch reviews Python files changed vs Git HEAD, "
             "including untracked files. Exit codes: 0 = clean, "
-            "1 = findings reported, 2 = error. Run 'scrut --docs' for the "
+            "1 = findings reported, 2 = error. Run 'avouch --docs' for the "
             "full documentation."
         ),
     )
@@ -58,8 +58,8 @@ def _main(argv=None):
     parser.add_argument(
         "--version",
         action="version",
-        version=f"scrut {SCRUT_VERSION}",
-        help="print the Scrut version and exit",
+        version=f"avouch {AVOUCH_VERSION}",
+        help="print the Avouch version and exit",
     )
     parser.add_argument("--json", action="store_true", help="print findings as JSON")
     parser.add_argument(
@@ -108,7 +108,7 @@ def _main(argv=None):
     try:
         config = load_config()
     except ValueError as exc:
-        print(f"error: invalid scrut.toml configuration: {exc}", file=sys.stderr)
+        print(f"error: invalid avouch.toml configuration: {exc}", file=sys.stderr)
         print("hint: check the [limits], [rules], and ignore_paths sections", file=sys.stderr)
         return ERROR
 
@@ -120,7 +120,7 @@ def _main(argv=None):
     if not args.not_git and not is_gitrepo():
         print("error: no Git repository found", file=sys.stderr)
         print(
-            "hint: run Scrut from inside a Git repository, or use --not-git to review files without Git",
+            "hint: run Avouch from inside a Git repository, or use --not-git to review files without Git",
             file=sys.stderr,
         )
         return ERROR
@@ -155,7 +155,7 @@ def _main(argv=None):
 
     vlog(
         args.verbose,
-        f"config: {'scrut.toml' if Path('scrut.toml').exists() else 'defaults (no scrut.toml)'}, "
+        f"config: {'avouch.toml' if Path('avouch.toml').exists() else 'defaults (no avouch.toml)'}, "
         f"{len(ignore_paths)} ignore path(s)", 
     )
     if args.verbose and ignore_paths:

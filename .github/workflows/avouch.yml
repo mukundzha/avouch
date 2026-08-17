@@ -1,11 +1,11 @@
-name: Scrut
+name: Avouch
 
 on:
   pull_request:
   push:
 
 jobs:
-  scrut:
+  avouch:
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -13,8 +13,8 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Install Scrut
+      - name: Install Avouch
         run: pip install -e .
 
-      - name: Run Scrut
-        run: scrut --all-files --json
+      - name: Run Avouch
+        run: avouch --all-files --json
