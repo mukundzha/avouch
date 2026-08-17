@@ -1,4 +1,4 @@
-# Avouch Roadmap — v0.3.3
+# Scrut Roadmap — v0.3.3
 
 **Theme: "First run clean. Every run relevant."**
 
@@ -10,25 +10,25 @@ survive the philosophy section of the README.
 
 ## 1. Vision
 
-Avouch does not compete with ruff on its battlefield. Ruff is the linter for
+Scrut does not compete with ruff on its battlefield. Ruff is the linter for
 your whole codebase: 800+ rules, Rust speed, autofix, a formatter, and a
 company behind it. Fighting over rule count or raw speed is a lost war.
 
-Avouch occupies the niche ruff structurally cannot enter:
+Scrut occupies the niche ruff structurally cannot enter:
 
 > **The review of your next push.**
 
 The report is the diff. Every finding is attributable to work you are about
 to push — never to the legacy you inherited. Runtime is proportional to your
-diff, not your repository. You keep authority: avouch reviews, it never gates.
+diff, not your repository. You keep authority: scrut reviews, it never gates.
 
 ### Positioning vs ruff
 
-| Axis | ruff | avouch |
+| Axis | ruff | scrut |
 |------|------|-------|
 | Review set | Everything you tell it | Git-native: only files about to change |
 | Runtime | Proportional to repo size | Proportional to your diff |
-| First run | Wall of legacy debt | `avouch init` — clean by construction |
+| First run | Wall of legacy debt | `scrut init` — clean by construction |
 | Every run | All findings, always | Baseline — only *new* findings |
 | Metrics | Fixed thresholds | Measured from your reality |
 | Output | Terse violation frames | Compiler-style: file:line + caret + context |
@@ -38,7 +38,7 @@ diff, not your repository. You keep authority: avouch reviews, it never gates.
 
 Whole-repo speed, rule breadth, autofix, formatting, ecosystem. These fights
 are lost before they start — and saying so in public is part of the product:
-avouch's one job is the seconds before `git push`.
+scrut's one job is the seconds before `git push`.
 
 ---
 
@@ -46,11 +46,11 @@ avouch's one job is the seconds before `git push`.
 
 ### IMPL 1 — Configuration hardening
 
-**What it is.** Today a malformed `avouch.toml` fails at analysis time with an
+**What it is.** Today a malformed `scrut.toml` fails at analysis time with an
 internal error (exit 2), values are not type-checked, and configuration only
 looks at the current working directory. This implementation makes
 configuration dependable before anything else is built on top of it:
-readable validation errors, and upward search for `avouch.toml`.
+readable validation errors, and upward search for `scrut.toml`.
 
 **How we'll make it.**
 - In `loader.py`, after `tomllib.load`, validate every key against the
@@ -60,10 +60,10 @@ readable validation errors, and upward search for `avouch.toml`.
   - `ignore_paths` must be a list of strings
   - unknown keys are ignored (documented behavior, unchanged)
 - Validation errors raise `ValueError` with a precise message
-  (`invalid avouch.toml configuration: limits.max_parameters must be a
+  (`invalid scrut.toml configuration: limits.max_parameters must be a
   positive integer; got "eight"`); `cli.py` already maps that to exit 2 with
   a hint — extend the hint to echo the offending key.
-- Upward search: `Path.cwd()` walks parent directories until `avouch.toml` is
+- Upward search: `Path.cwd()` walks parent directories until `scrut.toml` is
   found or the filesystem root is reached. Cache the resolved path alongside
   the existing mtime/size cache so a subdirectory run shares the config.
 - `--verbose` reports which config file was used (path or `defaults`).
@@ -80,16 +80,16 @@ and no run ever says `internal error` because of configuration.
 
 ---
 
-### IMPL 2 — `avouch init`: clean-by-construction onboarding
+### IMPL 2 — `scrut init`: clean-by-construction onboarding
 
 **What it is.** A one-command bootstrap: measure the current repository's
 maximums for every limit (parameter count, nesting depth, function lines,
-complexity, …), write a `avouch.toml` whose limits are that measured reality,
+complexity, …), write a `scrut.toml` whose limits are that measured reality,
 so the first run is **clean by construction**. Onboarding time-to-first-
-clean-run goes from "minutes of triage" to "one command."
 
+clean-run goes from "minutes of triage" to "one command."
 **How we'll make it.**
-- New `avouch init` CLI command (mutually exclusive with review flags).
+- New `scrut init` CLI command (mutually exclusive with review flags).
 - New `utility/measure.py`: a single module that walks each reviewable file
   once and computes every limit metric directly from the AST — reusing the
   existing primitives (`get_depth`, `calculate_complexity`, node
@@ -100,50 +100,50 @@ clean-run goes from "minutes of triage" to "one command."
   is 0 (no evidence) in which case use the current default. Rationale: the
   review set is the diff — legacy peaks may repeat, so one unit of headroom
   absorbs them while new violations still trigger.
-- `avouch init --dry-run` prints the would-be `avouch.toml` without writing;
-  `avouch init` writes the file and prints the summary
-  (`avouch.toml written: measured 12 maxima across N files`).
-- Rerunning `avouch init` recomputes from scratch (no incremental state).
+- `scrut init --dry-run` prints the would-be `scrut.toml` without writing;
+  `scrut init` writes the file and prints the summary
+  (`scrut.toml written: measured 12 maxima across N files`).
+- Rerunning `scrut init` recomputes from scratch (no incremental state).
 
 **Tests (before code).**
 - Probe repo with known maxima → generated TOML contains measured+1.
-- Zero-evidence rules keep defaults.
 - `--dry-run` does not create the file.
-- After `avouch init`, `avouch --all-files` exits 0 on the same repo.
+- Zero-evidence rules keep defaults.
+- After `scrut init`, `scrut --all-files` exits 0 on the same repo.
 - Adding a worse-than-limit function afterwards reports exactly that
   finding — the baseline philosophy survives.
 
-**Acceptance.** A fresh clone, `pip install avouch`, `cd repo`, `avouch init`,
-`avouch`: exit 0, output "All clean."
+**Acceptance.** A fresh clone, `pip install scrut`, `cd repo`, `scrut init`,
+`scrut`: exit 0, output "All clean."
 
 ---
 
 ### IMPL 3 — Baseline: "only new findings"
 
 **What it is.** The logical completion of "review the Python you changed":
-a baseline snapshot of current findings stored in `.avouch/baseline.json`,
+a baseline snapshot of current findings stored in `.scrut/baseline.json`,
 auto-suppressed on subsequent runs. The report then shows **only findings
 that did not exist at baseline time** — the diff-of-findings. This is the
 feature ruff structurally cannot ship: suppression is not silence, it is
 history.
 
 **How we'll make it.**
-- New `avouch baseline` command: runs the full review, writes
-  `.avouch/baseline.json` (schema `{"version": 1, "findings": [...]}`), where
+- New `scrut baseline` command: runs the full review, writes
+  `.scrut/baseline.json` (schema `{"version": 1, "findings": [...]}`), where
   each entry carries a stable fingerprint:
   `rule + file + item name + line`. The fingerprint is content-based, not
   hash-of-source, so moving a function changes the fingerprint and re-flags
   the finding honestly.
-- `.avouch/baseline.json` is committed to the repository (it is shared
-  intent, like `avouch.toml`); note this in `.gitignore` documentation.
+- `.scrut/baseline.json` is committed to the repository (it is shared
+  intent, like `scrut.toml`); note this in `.gitignore` documentation.
 - Runtime suppression: `cli.py` loads the baseline (mtime/size cache, same
   pattern as config), then filters reports *before* rendering and *before*
   exit-code computation. Suppressed findings are counted and reported in
   `--verbose` and in the BY-RULE section as
   `(+N suppressed by baseline)`.
-- `--no-baseline` disables suppression; `avouch baseline` is idempotent
+- `--no-baseline` disables suppression; `scrut baseline` is idempotent
   (recomputes the snapshot from scratch).
-- `avouch init` + `avouch baseline` compose: init makes the first run clean,
+- `scrut init` + `scrut baseline` compose: init makes the first run clean,
   baseline makes every later run only-new.
 
 **Tests (before code).**
@@ -154,7 +154,7 @@ history.
 - Baseline file with wrong version or malformed JSON → exit 2, readable
   error, never a traceback.
 
-**Acceptance.** `avouch baseline` once; every run after that reports only
+**Acceptance.** `scrut baseline` once; every run after that reports only
 findings introduced since the baseline — in CI and locally identically.
 
 ---
@@ -176,7 +176,7 @@ into a worker pool while keeping output byte-identical to the serial path.
 - zlib/thread resource: the config mtime/size cache is process-local and
   already keyed by stat — harmless when recomputed per worker.
 - Default pool size: `min(os.cpu_count(), 8)` — bounded by design
-  (`AVOUCH_WORKERS` env override, `1` forces serial for debugging).
+  (`SCRUT_WORKERS` env override, `1` forces serial for debugging).
 - Keep the serial path exactly as today when the reviewable set is small
   (≤ 8 files: pool startup overhead is not worth it).
 
@@ -184,10 +184,10 @@ into a worker pool while keeping output byte-identical to the serial path.
 - Equality test: parallel output (report text and `--json`) is byte-identical
   to serial output on the same fixture tree.
 - Determinism: two parallel runs produce identical output.
-- `AVOUCH_WORKERS=1` reproduces serial behavior.
+- `SCRUT_WORKERS=1` reproduces serial behavior.
 - Findings/exit codes unaffected.
 
-**Acceptance.** `avouch --all-files` on this repository's 200+ files completes
+**Acceptance.** `scrut --all-files` on this repository's 200+ files completes
 in ≤ 8s wall time (today ~25s), with output identical to serial.
 
 ---
@@ -224,15 +224,15 @@ stable.
 - Flags are mutually exclusive (exit 2 with hint on conflict).
 - Exit codes unchanged in all formats.
 
-**Acceptance.** A GitHub Actions job using `avouch --format=github` shows
+**Acceptance.** A GitHub Actions job using `scrut --format=github` shows
 inline annotations on the touched lines; a SARIF upload produces code
 scanning alerts with correct locations.
 
 ---
 
-### IMPL 6 — `avouch rule`: per-rule man pages
+### IMPL 6 — `scrut rule`: per-rule man pages
 
-**What it is.** `ruff rule`-parity for documentation: `avouch rule SCR002`
+**What it is.** `ruff rule`-parity for documentation: `scrut rule SCR002`
 prints one rule's full entry (what it detects, why it matters, example of
 bad and good code, config key), identical content to what `--docs` shows.
 One source of truth, two surfaces.
@@ -243,37 +243,37 @@ One source of truth, two surfaces.
   (`id → {name, description, example_bad, example_good, config_key,
   severity}`) that both `render_docs()` and the new command render from.
   Refactor, do not duplicate.
-- `cli.py`: `avouch rule <ID>` subcommand. Unknown ID → exit 2 with hint
-  (`unknown rule; try 'avouch --docs' or 'avouch rule SCR013'`). `avouch rule`
+- `cli.py`: `scrut rule <ID>` subcommand. Unknown ID → exit 2 with hint
+  (`unknown rule; try 'scrut --docs' or 'scrut rule SCR013'`). `scrut rule`
   with no argument lists all IDs.
-- `avouch --docs` still renders the full page, now generated from the same
+- `scrut --docs` still renders the full page, now generated from the same
   registry — content parity is guaranteed by construction.
 
 **Tests (before code).**
 - Every SCR001–SCR016 exists in the registry and is reachable via
-  `avouch rule`.
-- Rendered `avouch rule SCR002` contains name, description, example, config
+  `scrut rule`.
+- Rendered `scrut rule SCR002` contains name, description, example, config
   key, and matches the corresponding `--docs` section.
-- Unknown ID exits 2; bare `avouch rule` lists all rules.
+- Unknown ID exits 2; bare `scrut rule` lists all rules.
 
 **Acceptance.** No rule is undocumented, and the documentation cannot drift
-between `--docs` and `avouch rule` — the registry is the single source.
+between `--docs` and `scrut rule` — the registry is the single source.
 
 ---
 
 ### IMPL 7 — pre-commit hook
 
 **What it is.** A first-class pre-commit integration:
-`.pre-commit-hooks.yaml` that runs avouch on staged files, review-only
+`.pre-commit-hooks.yaml` that runs scrut on staged files, review-only
 (no gating config, exit code is transparent about findings).
 
 **How we'll make it.**
 - `.pre-commit-hooks.yaml` at the repository root:
-  `id: avouch`, `name: avouch`, `entry: avouch --staged`, `language: python`,
-  `types: [python]`, `pass_filenames: false` (avouch already computes the
+  `id: scrut`, `name: scrut`, `entry: scrut --staged`, `language: python`,
+  `types: [python]`, `pass_filenames: false` (scrut already computes the
   review set from git — it must not receive file lists twice).
 - README gains the pre-commit install block (`- repo:
-  https://github.com/mukundzha/avouch` + `rev` + `hooks: [avouch]`).
+  https://github.com/mukundzha/scrut` + `rev` + `hooks: [scrut]`).
 - post-commit philosophy is preserved: the hook reports findings; teams
   that want enforcement pair it with `--fail-on-findings`-style CI config —
   the hook itself never rewrites or blocks beyond the exit code.
@@ -281,20 +281,20 @@ between `--docs` and `avouch rule` — the registry is the single source.
   findings do not fail the hook.
 
 **Tests (before code).**
-- Run the hook entry directly (`pre-commit run avouch --files` on a fixture
+- Run the hook entry directly (`pre-commit run scrut --files` on a fixture
   repo, and the bare entry) — staged review set, correct exit codes
   (0 clean / 1 findings / 2 error).
 - Untracked staged files are reviewed; ignored paths are not.
 - `pass_filenames: false` verified by a run with explicit file args.
 
-**Acceptance.** `pre-commit run avouch` works on a fresh install per the
+**Acceptance.** `pre-commit run scrut` works on a fresh install per the
 README block and reports exactly the staged review set.
 
 ---
 
 ### IMPL 8 — Review-mode diff view: the sketch of a PR, locally
 
-**What it is.** `avouch --changed` today prints the diff; findings live in a
+**What it is.** `scrut --changed` today prints the diff; findings live in a
 separate report. Impl 8 merges them: the changed-files view annotates each
 finding **inline at its line inside the diff**, with the rule ID and message
 under the offending line — a local draft of a PR review comment thread, with
@@ -323,7 +323,7 @@ story.
 - No findings → view byte-identical to today's diff view.
 - Exit codes unaffected.
 
-**Acceptance.** A single `avouch --changed` screen shows: file header with
+**Acceptance.** A single `scrut --changed` screen shows: file header with
 +-/-- counts, the hunk, and every finding pinned at its exact line — the
 local sketch of the PR review.
 
@@ -333,10 +333,10 @@ local sketch of the PR review.
 
 | Milestone | Implementations | Definition of done |
 |-----------|----------------|-------------------|
-| M1 — Solid ground | 1 (config hardening), 2 (`avouch init`) | All new tests green; 74 existing tests still green; self-scan of this repo clean; README + `--docs` in sync |
+| M1 — Solid ground | 1 (config hardening), 2 (`scrut init`) | All new tests green; 74 existing tests still green; self-scan of this repo clean; README + `--docs` in sync |
 | M2 — New-findings engine | 3 (baseline), 4 (parallel) | Acceptance metrics met (≤8s/200 files, only-new reports) |
 | M3 — Into CI | 5 (github + sarif formats) | Annotations verified in a real Actions run; SARIF parses |
-| M4 — Ships as a product | 6 (`avouch rule`), 7 (pre-commit), 8 (diff review) | Demo-ready `--changed` screen; CHANGELOG + version bump wired for v0.3.3 |
+| M4 — Ships as a product | 6 (`scrut rule`), 7 (pre-commit), 8 (diff review) | Demo-ready `--changed` screen; CHANGELOG + version bump wired for v0.3.3 |
 
 Sequencing is deliberate: M1 hardens the ground everything else sits on,
 M2 delivers the identity features (first-run-clean, only-new), M3 makes CI
@@ -346,15 +346,15 @@ usability real, M4 is the polish that makes the release demo-ready.
 
 | Item | Why not |
 |------|---------|
-| Semantic autofix | Avouch reviews, it does not rewrite your code — fixing is yours |
+| Semantic autofix | Scrut reviews, it does not rewrite your code — fixing is yours |
 | Plugin/rule-count ecosystem | The ceiling is raised deliberately, not by accretion |
 | Daemon / watch mode | Runtime is the standard library, no process to keep alive |
-| `# avouch: ignore` comments | Inline suppression hides systemic debt; baseline is the honest mechanism |
+| `# scrut: ignore` comments | Inline suppression hides systemic debt; baseline is the honest mechanism |
 | Formatting | Out of scope on purpose: formatting is not review |
 
 ## 5. Success metrics for v0.3.3
 
-- **Time to first clean run** — from `pip install avouch` to "All clean":
+- **Time to first clean run** — from `pip install scrut` to "All clean":
   under 60 seconds, zero config (IMPL 2).
 - **% of findings attributable to your diff** — 100%, by construction; the
   baseline (IMPL 3) extends the promise from "the files you changed" to
