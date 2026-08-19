@@ -18,23 +18,8 @@ avouch
 
 ---
 
-## Why it exists
+## Read why this exists: https://dev.to/mukund_zha/i-built-a-python-code-reviewer-that-only-reviews-the-code-you-changed-2hl5
 
-Every code review tool reviews the whole repo. Mine has one legacy
-module nobody wants to touch, and every tool I tried spent half its
-report on it. My actual code got buried.
-
-Avouch reviews the diff, not the repository. Since `git diff HEAD` plus
-untracked files is the review set, everything reported is something
-*you* did. `PASSED ✓ util.py` means that file is clean right now.
-
-What it does is exact: parameter counts, nesting depth, line spans —
-all from the AST, so a metric it reports, it actually measured. What it
-doesn't do: gate. Exit code is `0` clean, `1` findings, `2` tool error;
-enforcement lives wherever you put it (a hook, CI), not inside the
-tool.
-
----
 
 ## Installation
 
