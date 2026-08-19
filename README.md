@@ -2,13 +2,13 @@
 
 **Review the Python you changed, not the Python you inherited.**
 
-Avouch is a Python code reviewer that only looks at what you changed. It
-asks Git which files your next commit will touch, parses each changed
+Avouch is a code reviewer for Python that only looks at the files your
+next commit touches. It asks git for that list, parses each changed
 `.py` file with the standard `ast` module, and reports structural
-problems against limits you configure in `avouch.toml`.
+problems against limits you set in `avouch.toml`.
 
-No daemon. No network. No path lists to maintain. Run it in the seconds
-before `git push`, fix what it flags, push.
+No daemon, no network, nothing to install alongside it. Run it in the
+seconds before `git push`:
 
 ```bash
 pip install avouch
@@ -20,30 +20,19 @@ avouch
 
 ## Why it exists
 
-Most code review tools review the whole repository. Mine has one ancient
-legacy module nobody wants to touch, and every tool I tried spent half
-its report lecturing me about that module — while the code I actually
-wrote got buried.
+Every code review tool reviews the whole repo. Mine has one legacy
+module nobody wants to touch, and every tool I tried spent half its
+report on it. My actual code got buried.
 
-Avouch inverts that: **the review set is the diff, not the repository.**
-It reviews `git diff HEAD` plus untracked files, so every finding is
-something *you* did, not something you inherited. `PASSED ✓ util.py`
-means that file is clean today.
+Avouch reviews the diff, not the repository. Since `git diff HEAD` plus
+untracked files is the review set, everything reported is something
+*you* did. `PASSED ✓ util.py` means that file is clean right now.
 
-The rules that come with it:
-
-- **Metrics are exact.** Parameter counts, nesting depth, and line spans
-  come from the AST, not regex. If a metric cannot be computed exactly,
-  Avouch does not claim it.
-- **Errors are data.** An unreadable or syntactically broken file becomes
-  an `ERROR` entry in the report. One broken file never cancels the
-  review of the others.
-- **Avouch reviews; it does not gate.** The exit code signals the outcome —
-  `0` clean, `1` violations found, `2` Avouch error. Enforcement belongs
-  in an opt-in interface — a hook or a CI step — not in the tool itself.
-- **The runtime is the standard library.** Three `git` subprocess calls
-  and `ast`/`tomllib`. No daemon to keep alive; runtime is bounded by
-  the size of your diff, not your repository.
+What it does is exact: parameter counts, nesting depth, line spans —
+all from the AST, so a metric it reports, it actually measured. What it
+doesn't do: gate. Exit code is `0` clean, `1` findings, `2` tool error;
+enforcement lives wherever you put it (a hook, CI), not inside the
+tool.
 
 ---
 
@@ -70,7 +59,7 @@ Both register the `avouch` console script (`avouch.cli:main`).
 
 ## Quick start
 
-Make a change, run `avouch`, get a report:
+Change a file, run it, read the report:
 
 ```text
 $ avouch
@@ -103,16 +92,13 @@ PASSED
   ✓ src/util.py
 ```
 
-Each finding renders compiler-style: a `file:line` header with the rule
-id and message, the offending code region with dimmed line numbers, and a
-caret `^^^^^` under the flagged name (rule id in blue on a TTY). Then a
-BY RULE summary and a PASSING grid for the files that came out clean.
-Identical `(component, rule)` findings are deduplicated per file — the
-header counts every finding, so with overlapping rule IDs (SCR004 /
-SCR006 duplicate-branch) the row count can be lower than the header
-count.
+Each finding is compiler-style: `file:line`, the rule id and message,
+the offending code with dimmed line numbers, a caret under the flagged
+name. Then a BY RULE tally and a PASSING list for the clean files.
+Duplicate `(component, rule)` findings collapse to one row per file, so
+overlapping rule IDs (SCR004 / SCR006) stay readable.
 
-A clean run is exactly four characters:
+A clean run is shorter:
 
 ```text
 $ avouch
@@ -120,7 +106,7 @@ $ avouch
 All clean.
 ```
 
-The interface is one command with a small set of optional flags:
+Flags:
 
 ```bash
 avouch            # human report
@@ -134,20 +120,13 @@ avouch --quiet    # analyze, print no report; exit code only
 avouch --verbose  # step-by-step review details on stderr
 ```
 
-The review set is defined by Git, so there is nothing to configure at
-invocation time. Avouch reviews:
+The review set is whatever git says is about to be pushed: files
+modified vs `HEAD` plus untracked `.py` files. Deleted paths and
+non-`.py` files are skipped; committed, untouched files never appear;
+files that look generated (`generated.py`, `*_generated.py`, …) are
+skipped too. The scope flags above are mutually exclusive.
 
-- tracked files modified vs. `HEAD` (`git diff HEAD --name-only`), and
-- untracked `.py` files (`git ls-files --others --exclude-standard`).
-
-Deleted paths and non-`.py` files are skipped. Committed, untouched files
-never appear in the output. Files that look generated
-(`generated.py`, `*_generated.py`, `codegen.py`, `autogen.py`, … — see
-`src/avouch/utility/is_generated.py`) are skipped too.
-
-The review-scope flags `--changed`, `--staged`, and `--all-files` are
-mutually exclusive — pick at most one. The review happens in Git-land:
-without a repository, or against a fresh checkout, there is simply
+Without a repository — or against a fresh CI checkout — there's
 nothing to review:
 
 ```text
@@ -156,17 +135,15 @@ $ avouch
 error: no Git repository found
 hint: run Avouch from inside a Git repository, or use --not-git to review files without Git
 
-$ cd ~/fresh-checkout   # e.g. a CI runner
+$ cd ~/fresh-checkout
 $ avouch
 error: nothing to review
 hint: nothing changed vs HEAD (CI checkouts are clean); use --all-files for a full review
 ```
 
-Colors are ANSI codes emitted only when stdout is a TTY. Piped output is
-plain, so `avouch | tee review.log` and CI capture work cleanly. Runtime
-errors are written to stderr, so stdout stays clean for piping and
-`--json` capture. The exit code is `0` when the review is clean, `1`
-when findings are reported, and `2` when Avouch cannot run.
+Colors are ANSI, only when stdout is a TTY; piped output is plain, so
+`avouch | tee review.log` and CI capture work cleanly. Errors go to
+stderr. Exit codes: `0` clean, `1` findings, `2` couldn't run.
 
 ### Built-in documentation
 
