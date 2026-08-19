@@ -2,10 +2,10 @@
 
 **Review the Python you changed, not the Python you inherited.**
 
-Avouch is a lightweight, Git-aware static analysis CLI for Python. It asks
-Git which files your next commit will touch, parses each changed `.py`
-file with the standard `ast` module, and reports structural problems
-against limits you configure in `avouch.toml`.
+Avouch is a Python code reviewer that only looks at what you changed. It
+asks Git which files your next commit will touch, parses each changed
+`.py` file with the standard `ast` module, and reports structural
+problems against limits you configure in `avouch.toml`.
 
 No daemon. No network. No path lists to maintain. Run it in the seconds
 before `git push`, fix what it flags, push.
@@ -18,34 +18,20 @@ avouch
 
 ---
 
-## Table of contents
-
-- [Why it exists](#why-it-exists)
-- [Installation](#installation)
-- [Quick start](#quick-start)
-- [JSON output](#json-output)
-- [Quiet mode](#quiet-mode)
-- [GitHub Actions](#github-actions)
-- [Other CI systems](#other-ci-systems)
-- [Configuration](#configuration)
-- [Rules](#rules)
-- [How it works](#how-it-works)
-- [Repository layout](#repository-layout)
-- [Adding a rule](#adding-a-rule)
-- [Testing](#testing)
-- [Roadmap](#roadmap)
-- [FAQ](#faq)
-- [Contributing](#contributing)
-- [License](#license)
-
----
-
 ## Why it exists
 
-- **The review set is the diff, not the repository.** Avouch computes the
-  review set from Git at run time (`git diff HEAD --name-only` plus
-  untracked files). Every finding is attributable to work you are about
-  to push — never to the legacy you inherited.
+Most code review tools review the whole repository. Mine has one ancient
+legacy module nobody wants to touch, and every tool I tried spent half
+its report lecturing me about that module — while the code I actually
+wrote got buried.
+
+Avouch inverts that: **the review set is the diff, not the repository.**
+It reviews `git diff HEAD` plus untracked files, so every finding is
+something *you* did, not something you inherited. `PASSED ✓ util.py`
+means that file is clean today.
+
+The rules that come with it:
+
 - **Metrics are exact.** Parameter counts, nesting depth, and line spans
   come from the AST, not regex. If a metric cannot be computed exactly,
   Avouch does not claim it.
@@ -53,12 +39,11 @@ avouch
   an `ERROR` entry in the report. One broken file never cancels the
   review of the others.
 - **Avouch reviews; it does not gate.** The exit code signals the outcome —
-  `0` clean, `1` violations found, `2` Avouch error — but enforcement belongs
-  in an opt-in interface, not in a tool you run before every push.
+  `0` clean, `1` violations found, `2` Avouch error. Enforcement belongs
+  in an opt-in interface — a hook or a CI step — not in the tool itself.
 - **The runtime is the standard library.** Three `git` subprocess calls
-  and
-  `ast`/`tomllib`. No daemon to keep alive; runtime is bounded by the
-  size of your diff, not your repository.
+  and `ast`/`tomllib`. No daemon to keep alive; runtime is bounded by
+  the size of your diff, not your repository.
 
 ---
 
@@ -85,43 +70,7 @@ Both register the `avouch` console script (`avouch.cli:main`).
 
 ## Quick start
 
-The interface is one command with a small set of optional flags:
-
-```bash
-cd your-repo
-# ... make a change ...
-avouch            # human report
-avouch --json     # one JSON document on stdout
-avouch --docs     # built-in documentation; no review performed
-avouch --version  # print the version and exit
-avouch --verbose  # step-by-step review details on stderr
-avouch --quiet    # analyze, print no report; exit code only
-avouch --changed  # compact added/deleted view of changed files vs HEAD
-avouch --staged   # review only files staged for the next commit
-avouch --all-files  # review every eligible Python file, not just the diff
-avouch --not-git  # review every eligible .py file on disk; no Git repo needed
-avouch --help     # every flag
-```
-
-The review set is defined by Git, so there is nothing to configure at
-invocation time. With `--not-git`, Avouch skips the Git requirement and
-reviews every eligible `.py` file found by walking the current
-directory instead (skipping Git, cache, and virtual-environment
-directories). Avouch reviews:
-
-- tracked files modified vs. `HEAD` (`git diff HEAD --name-only`), and
-- untracked `.py` files (`git ls-files --others --exclude-standard`).
-
-Deleted paths and non-`.py` files are skipped. Committed, untouched files
-never appear in the output. Files that look generated
-(`generated.py`, `*_generated.py`, `codegen.py`, `autogen.py`, … — see
-`src/avouch/utility/is_generated.py`) are skipped too.
-
-The review-scope flags `--changed`, `--staged`, and `--all-files` are
-mutually exclusive — pick at most one. The output flags `--json`,
-`--verbose`, and `--quiet` combine freely with any review scope.
-
-### A run with findings
+Make a change, run `avouch`, get a report:
 
 ```text
 $ avouch
@@ -154,22 +103,16 @@ PASSED
   ✓ src/util.py
 ```
 
-- **Header** — `AVOUCH · N FILES · W WARN · E ERR`: file and per-severity
-  counts, followed by the per-file findings.
-- **Findings** — each finding renders compiler-style: a `file:line`
-  header with the rule id and full message, then the offending code
-  region with dimmed line numbers and a caret `^^^^^` under the flagged
-  name (rule id in blue on a TTY).
-- **BY RULE summary** — findings counted per rule, most common first,
-  with counts aligned on the right. Rendered only when findings exist.
-- **PASSING grid** — compliant files, compressed to a few lines with a
-  `[+N more]` note when there are many.
-- Identical `(component, rule)` findings are deduplicated per file — the
-  header counts every finding, so with overlapping rule IDs (SCR004 /
-  SCR006 duplicate-branch) the row count can be lower than the header
-  count.
+Each finding renders compiler-style: a `file:line` header with the rule
+id and message, the offending code region with dimmed line numbers, and a
+caret `^^^^^` under the flagged name (rule id in blue on a TTY). Then a
+BY RULE summary and a PASSING grid for the files that came out clean.
+Identical `(component, rule)` findings are deduplicated per file — the
+header counts every finding, so with overlapping rule IDs (SCR004 /
+SCR006 duplicate-branch) the row count can be lower than the header
+count.
 
-### A clean run
+A clean run is exactly four characters:
 
 ```text
 $ avouch
@@ -177,7 +120,35 @@ $ avouch
 All clean.
 ```
 
-### Edge cases
+The interface is one command with a small set of optional flags:
+
+```bash
+avouch            # human report
+avouch --json     # one JSON document on stdout
+avouch --docs     # built-in documentation; no review performed
+avouch --changed  # compact added/deleted view of changed files vs HEAD
+avouch --staged   # review only files staged for the next commit
+avouch --all-files  # review every eligible Python file, not just the diff
+avouch --not-git  # review every eligible .py file on disk; no Git repo needed
+avouch --quiet    # analyze, print no report; exit code only
+avouch --verbose  # step-by-step review details on stderr
+```
+
+The review set is defined by Git, so there is nothing to configure at
+invocation time. Avouch reviews:
+
+- tracked files modified vs. `HEAD` (`git diff HEAD --name-only`), and
+- untracked `.py` files (`git ls-files --others --exclude-standard`).
+
+Deleted paths and non-`.py` files are skipped. Committed, untouched files
+never appear in the output. Files that look generated
+(`generated.py`, `*_generated.py`, `codegen.py`, `autogen.py`, … — see
+`src/avouch/utility/is_generated.py`) are skipped too.
+
+The review-scope flags `--changed`, `--staged`, and `--all-files` are
+mutually exclusive — pick at most one. The review happens in Git-land:
+without a repository, or against a fresh checkout, there is simply
+nothing to review:
 
 ```text
 $ cd /tmp/somewhere-without-git
