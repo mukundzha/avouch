@@ -17,9 +17,10 @@
 <header class="nav">
   <a class="brand" href="#top"><span class="brand-dot"></span>avouch</a>
   <nav class="nav-links">
-    <a href="#why">Why</a>
+    <a href="#how">How it works</a>
+    <a href="#report">The report</a>
     <a href="#features">Features</a>
-    <a href="#quickstart">Quick start</a>
+    <a href="#faq">FAQ</a>
     <a href="https://github.com/mukundzha/avouch" target="_blank" rel="noopener">GitHub</a>
     <a class="pill" href="https://pypi.org/project/avouch/" target="_blank" rel="noopener">pip install avouch</a>
   </nav>
@@ -28,17 +29,15 @@
 <main id="top">
 
   <section class="hero">
-    <div class="hero-copy">
-      <p class="eyebrow">Git-aware &middot; local &middot; free</p>
-      <h1>Review the Python<br><em>you changed.</em></h1>
-      <p class="sub">avouch reviews only the files your next commit
-      touches &mdash; 17 AST rules, zero dependencies, seconds.</p>
-      <div class="cta-row">
-        <button class="copy" data-copy="pip install avouch" aria-label="Copy install command">
-          <code>$ pip install avouch</code><span class="copy-state">copy</span>
-        </button>
-        <a class="btn ghost" href="https://github.com/mukundzha/avouch" target="_blank" rel="noopener">View source</a>
-      </div>
+    <p class="kicker">Python code review &middot; git-aware &middot; local &middot; free</p>
+    <h1>Review the Python<br><em>you changed.</em></h1>
+    <p class="sub">Reviews only the files your next commit touches.
+    17 AST rules, zero dependencies, seconds before git push.</p>
+    <div class="cta-row">
+      <button class="copy" data-copy="pip install avouch" aria-label="Copy install command">
+        <code>$ pip install avouch</code><span class="copy-state">copy</span>
+      </button>
+      <a class="btn ghost" href="https://github.com/mukundzha/avouch" target="_blank" rel="noopener">View source</a>
     </div>
 
     <figure class="hero-shot">
@@ -46,80 +45,158 @@
         <span class="dot"></span><span class="dot"></span><span class="dot"></span>
         <span class="term-title">demo &middot; 1 file &middot; 13 warnings</span>
       </div>
-      <img src="demo.gif" alt="avouch reviewing codebase.py: three findings with caret markers, then a clear run, in a terminal" width="1200" height="500">
+      <img src="demo.gif" alt="avouch reviewing codebase.py: findings with caret markers, then a clear run, in a terminal" width="1200" height="500">
     </figure>
   </section>
 
-  <section class="why" id="why">
-    <h2>I was paying for a reviewer that spent half its report on code I never wrote.</h2>
-    <p>It queued my actual diffs behind everyone else's. I wanted a reviewer
-    that only looks at the code I'm about to push, runs locally in the
-    seconds before <code>git push</code>, and costs nothing. So I built one.</p>
+  <section class="manifesto">
+    <p class="m-quote">I was paying for a reviewer that spent
+    half its report on code I never wrote.</p>
+    <p class="m-body">It queued my real diffs behind everyone else's and
+    charged per page. I wanted a reviewer that looks only at what I'm about
+    to push, runs locally in the seconds before <code>git push</code>, and
+    costs nothing. So I built one.</p>
+  </section>
+
+  <section class="how" id="how">
+    <div class="sec-head">
+      <p class="kicker-bound">[ HOW IT WORKS ]</p>
+      <h2>How avouch reviews every diff</h2>
+    </div>
+    <ol class="steps-row">
+      <li>
+        <span class="step-n">01</span>
+        <h3>Asks git what you changed</h3>
+        <p>One commit's worth of files: staged, unstaged, or a whole
+        directory via <code>--not-git</code>. The diff is the scope.</p>
+      </li>
+      <li>
+        <span class="step-n">02</span>
+        <h3>Walks the AST</h3>
+        <p>The stdlib <code>ast</code> module parses each changed <code>.py</code>.
+        17 rules, no dependencies, no network, nothing sent anywhere.</p>
+      </li>
+      <li>
+        <span class="step-n">03</span>
+        <h3>Reports only your diff</h3>
+        <p>Findings render with <code>file:line</code> and carets. Exit codes
+        gate CI: <code>0</code> clean, <code>1</code> findings,
+        <code>2</code> error.</p>
+      </li>
+    </ol>
+  </section>
+
+  <section class="report" id="report">
+    <div class="sec-head">
+      <p class="kicker-bound">[ THE REPORT ]</p>
+      <h2>Three findings that should not reach main.</h2>
+    </div>
+    <div class="finding-grid">
+      <article class="finding">
+        <div class="f-meta">
+          <code class="f-file">codebase.py</code>
+          <span class="f-line">line 4</span>
+        </div>
+        <pre class="f-diff"><span class="f-add">+ def connect(host, port, user, password, db, timeout,
++             retries, ssl, tls, cert):</span>
+<span class="f-caret">  ^^^^^^^</span></pre>
+        <p class="f-title">SCR002 &middot; Bare except detected</p>
+        <p class="f-body">A bare except swallows KeyboardInterrupt and
+        SystemExit along with everything else.</p>
+        <a class="f-link" href="https://github.com/mukundzha/avouch" target="_blank" rel="noopener">avouch --docs →</a>
+      </article>
+
+      <article class="finding">
+        <div class="f-meta">
+          <code class="f-file">codebase.py</code>
+          <span class="f-line">line 11</span>
+        </div>
+        <pre class="f-diff"><span class="f-add">+ def parse(content: str):</span>
+<span class="f-caret">  ^^^^^^^^^^^^^^^^^^^^</span></pre>
+        <p class="f-title">SCR001 &middot; Function returns no value</p>
+        <p class="f-body">Every path falls off the end — callers get
+        nothing back, and nothing tells them.</p>
+        <a class="f-link" href="https://github.com/mukundzha/avouch" target="_blank" rel="noopener">avouch --docs →</a>
+      </article>
+
+      <article class="finding">
+        <div class="f-meta">
+          <code class="f-file">codebase.py</code>
+          <span class="f-line">line 22</span>
+        </div>
+        <pre class="f-diff"><span class="f-add">+ if host and port and user and password and db and timeout:</span>
+<span class="f-caret">  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^</span></pre>
+        <p class="f-title">SCR003 &middot; Boolean expression too complex</p>
+        <p class="f-body">Six conditions in one <code>if</code> — the
+        branch that hits says nothing about why.</p>
+        <a class="f-link" href="https://github.com/mukundzha/avouch" target="_blank" rel="noopener">avouch --docs →</a>
+      </article>
+    </div>
+    <p class="report-note">13 findings &middot; 1 file &middot; 11 rules &middot; reproduce with <code>avouch --not-git</code></p>
   </section>
 
   <section class="features" id="features">
-    <div class="feat-cell big">
-      <h3>The report is the diff</h3>
-      <p>Every finding is attributable to work you are about to push &mdash;
-      never the legacy you inherited. Old debt never reaches your screen.</p>
-      <pre class="mini-report"><span class="hl">codebase.py:4</span> SCR002: Bare except detected.
-  def connect(host, port, user, password, db, timeout,
-              retries, ssl, tls, cert):
-      ^^^^^^^ SCR002
-<span class="hl">codebase.py:4</span> SCR014: Too many parameters (10/5).
-<span class="hl">codebase.py:22</span> SCR003: Boolean expression too complex (6/5).
+    <h2>Built to get out of the way</h2>
+    <div class="feat-grid">
+      <div class="feat-cell big">
+        <h3>First run, clean</h3>
+        <p><code>avouch init</code> measures your real code — parameters,
+        nesting, complexity — and writes an <code>avouch.toml</code> your
+        repository already passes. The first report says nothing.</p>
+        <pre class="mini-report"><span class="accent">$ avouch init</span>
+measured 12 maxima across 34 files
+wrote avouch.toml
 
-BY RULE
-  SCR002 Bare except                 2
-  SCR014 Too many parameters         2</pre>
-    </div>
-    <div class="feat-cell">
-      <h3>First run, clean</h3>
-      <p><code>avouch init</code> measures your real code &mdash; params,
-      nesting, complexity &mdash; and writes an <code>avouch.toml</code> your
-      repository already passes.</p>
-    </div>
-    <div class="feat-cell">
-      <h3>Actually local</h3>
-      <p>No daemon, no cloud, no file sent anywhere. Python 3.10+ and git
-      &mdash; that's the whole install.</p>
-    </div>
-    <div class="feat-cell">
-      <h3>Future findings only</h3>
-      <p>Baseline snapshots make later runs show nothing but what changed
-      since the snapshot. Suppression is history, not silence.</p>
-    </div>
-    <div class="feat-cell">
-      <h3>17 AST rules</h3>
-      <p>Parameters, nesting, complexity, bare excepts, duplicate branches,
-      mutable defaults &mdash; each one explainable, each one configurable.</p>
-    </div>
-    <div class="feat-cell">
-      <h3>CI-native</h3>
-      <p><code>--json</code> emits a stable, versioned document. Exit codes
-      <code>0 <span class="dim">clean</span> &middot; 1 <span class="dim">findings</span> &middot; 2 <span class="dim">error</span></code>.</p>
+$ avouch
+All clean. — 0 findings</pre>
+      </div>
+      <div class="feat-cell">
+        <h3>Actually local</h3>
+        <p>No daemon, no cloud. Python 3.10+ and git — that's the
+        whole install.</p>
+      </div>
+      <div class="feat-cell">
+        <h3>Future findings only</h3>
+        <p>Baseline snapshots make later runs show nothing but what
+        changed since the snapshot.</p>
+      </div>
+      <div class="feat-cell">
+        <h3>17 AST rules</h3>
+        <p>Parameters, nesting, complexity, bare excepts, duplicate
+        branches — each explainable, each configurable.</p>
+      </div>
+      <div class="feat-cell">
+        <h3>CI-native</h3>
+        <p><code>--json</code> emits a stable, versioned document —
+        readable by anything that parses JSON.</p>
+      </div>
+      <div class="feat-cell">
+        <h3>Done in seconds</h3>
+        <p>A diff-sized file list parsed by the standard library.
+        There is nothing to warm up.</p>
+      </div>
     </div>
   </section>
 
-  <section class="quickstart" id="quickstart">
+  <section class="quickstart">
     <h2>Three commands</h2>
     <ol class="steps">
       <li>
-        <span class="step-n">1</span>
+        <span class="step-n">01</span>
         <div>
           <h3>Install</h3>
           <button class="copy" data-copy="pip install avouch" aria-label="Copy install command"><code>$ pip install avouch</code><span class="copy-state">copy</span></button>
         </div>
       </li>
       <li>
-        <span class="step-n">2</span>
+        <span class="step-n">02</span>
         <div>
           <h3>Measure once</h3>
           <button class="copy" data-copy="avouch init" aria-label="Copy init command"><code>$ avouch init</code><span class="copy-state">copy</span></button>
         </div>
       </li>
       <li>
-        <span class="step-n">3</span>
+        <span class="step-n">03</span>
         <div>
           <h3>Review the diff</h3>
           <button class="copy" data-copy="avouch" aria-label="Copy review command"><code>$ avouch</code><span class="copy-state">copy</span></button>
@@ -128,23 +205,45 @@ BY RULE
     </ol>
   </section>
 
+  <section class="faq" id="faq">
+    <h2>Questions</h2>
+    <details>
+      <summary>Does it send my code anywhere?</summary>
+      <p>No. avouch has no network code at all — parsing is
+      standard-library, and nothing leaves the machine.</p>
+    </details>
+    <details>
+      <summary>Will my legacy code light up the report?</summary>
+      <p>Only the files your next commit touches run. <code>avouch init</code>
+      sets limits your repo already passes, and baseline snapshots keep
+      later reports to what changed.</p>
+    </details>
+    <details>
+      <summary>Can I run it in CI?</summary>
+      <p>Yes. <code>--json</code> gives a versioned document and exit codes
+      gate the pipeline: 0 clean, 1 findings, 2 error.</p>
+    </details>
+    <details>
+      <summary>Is it an AI reviewer?</summary>
+      <p>No. It's a deterministic rule engine over the AST — the same
+      findings for the same code, forever, free.</p>
+    </details>
+  </section>
+
 </main>
 
 <footer>
+  <p class="foot-manifesto">avouch is the zero-dependency review
+  layer. <em>Get back to shipping.</em></p>
   <div class="foot-grid">
-    <div>
-      <p class="foot-brand"><span class="brand-dot"></span>avouch</p>
-      <p class="foot-tag">Review the Python you changed, not the<br>Python you inherited.</p>
-    </div>
     <div class="foot-links">
       <a href="https://github.com/mukundzha/avouch" target="_blank" rel="noopener">GitHub</a>
       <a href="https://pypi.org/project/avouch/" target="_blank" rel="noopener">PyPI</a>
       <a href="https://terminaltrove.com/" target="_blank" rel="noopener">Terminal Trove</a>
       <a href="https://github.com/mukundzha/avouch/blob/main/roadmap.md" target="_blank" rel="noopener">Roadmap</a>
-      <a href="https://github.com/mukundzha/avouch/blob/main/LICENSE" target="_blank" rel="noopener">MIT License</a>
     </div>
+    <p class="foot-note">avouch &middot; MIT &middot; exit codes 0 / 1 / 2</p>
   </div>
-  <p class="foot-note">avouch &middot; built in seconds before push &middot; exit codes 0 / 1 / 2</p>
 </footer>
 
 <script>
