@@ -1,6 +1,7 @@
 import argparse
 import importlib.metadata
 import sys
+import tomllib
 import traceback
 from pathlib import Path
 
@@ -10,6 +11,7 @@ from avouch.analyzer import analyze_file
 from avouch.report import generate_report, render_diff_view, render_json, vlog
 from avouch.utility.docs import render_docs
 from avouch.git import is_gitrepo, get_changed_files, get_staged_files, get_all_files, get_all_files_on_disk, get_reviewable_files
+from avouch.utility.measure import measure_maxima
 
 SUCCESS = 0
 VIOLATIONS_FOUND = 1
@@ -99,11 +101,16 @@ def _main(argv=None):
         action="store_true",
         help="analyze Python files without requiring a Git repository",
     )
+    parser.add_argument("init", nargs="?", const="init", help="bootstrap avouch.toml from the current repository")
+    parser.add_argument("--dry-run", action="store_true", help="print the avouch.toml that init would write without writing it")
     args = parser.parse_args(argv)
 
     if args.docs:
         render_docs()
         return SUCCESS
+
+    if args.init:
+        return _cmd_init(args)
 
     try:
         config = load_config()
@@ -263,3 +270,72 @@ def _main(argv=None):
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
+def _serialize_config(config):
+
+    sections = []
+
+    if config.get("ignore_paths"):
+        sections.append(f"ignore_paths = {config['ignore_paths']!s}")
+
+    limits_lines = ["[limits]"] + [f"{k} = {v}" for k, v in config["limits"].items()]
+
+    sections.append("\n".join(limits_lines))
+
+    if config.get("rules"):
+        rules_lines = ["[rules]"] + [f"{k} = {str(v).lower()}" for k, v in config["rules"].items()]
+
+        sections.append("\n".join(rules_lines))
+
+    return "\n\n".join(sections) + "\n"
+
+
+def _cmd_init(args):
+
+    if args.changed or args.staged or args.all_files or args.not_git:
+        print(
+            "error: init cannot be combined with --changed, --staged, --all-files, or --not-git",
+            file=sys.stderr,
+        )
+        return ERROR
+
+    try:
+        config = load_config()
+    except ValueError as exc:
+        print(f"error: invalid avouch.toml configuration: {exc}", file=sys.stderr)
+        print("hint: check the [limits], [rules], and ignore_paths sections", file=sys.stderr)
+        return ERROR
+
+    files = get_reviewable_files(get_all_files_on_disk(), config["ignore_paths"])
+
+    if not files:
+        print("error: nothing to measure", file=sys.stderr)
+        print("hint: avouch init measures every Python file under the current directory", file=sys.stderr)
+        return ERROR
+
+    maxima = measure_maxima(files, config["rules"])
+
+    limits = {
+        key: (maxima[key] + 1 if maxima[key] > 0 else config["limits"][key])
+        for key in DEFAULT_LIMITS
+    }
+
+    existing = {}
+
+    if Path("avouch.toml").exists():
+        with open("avouch.toml", "rb") as file:
+            existing = tomllib.load(file)
+
+    existing["limits"] = limits
+
+    serialized = _serialize_config(existing)
+
+    if args.dry_run:
+        print(serialized, end="")
+        return SUCCESS
+
+    Path("avouch.toml").write_text(serialized, encoding="utf-8")
+
+    print(f"avouch.toml written: measured {len(limits)} maxima across {len(files)} files")
+
+    return SUCCESS
