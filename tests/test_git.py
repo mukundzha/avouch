@@ -1339,3 +1339,22 @@ def test_main_mutable_default_args_nested_function_flagged_once(tmp_path, monkey
 
     assert len(scr017) == 1
     assert scr017[0]["name"] == "inner"
+
+
+def test_reviewable_files_skip_env_dirs(tmp_path, monkeypatch):
+
+    monkeypatch.chdir(tmp_path)
+
+    from avouch.git import get_reviewable_files
+
+    (tmp_path / "app.py").write_text("x = 1\n")
+
+    for dirname in ("testenv", "venv", ".venv", "node_modules", "site-packages", "dist", "build"):
+        (tmp_path / dirname).mkdir(exist_ok=True)
+        (tmp_path / dirname / "bad.py").write_text("def t():\n    pass\n")
+
+    paths = [str(p.relative_to(tmp_path)) for p in tmp_path.rglob("*.py")]
+
+    reviewable = get_reviewable_files(paths)
+
+    assert reviewable == ["app.py"]

@@ -64,7 +64,25 @@ def get_all_files():
     return result.stdout.splitlines()
 
 
-DISK_SKIP_DIRS = {".git", ".venv", "venv", "env", "__pycache__", ".pytest_cache"}
+DISK_SKIP_DIRS = {
+    ".git",
+    ".venv",
+    "venv",
+    "env",
+    "testenv",
+    "__pycache__",
+    ".pytest_cache",
+    ".tox",
+    ".nox",
+    ".eggs",
+    ".egg-info",
+    ".mypy_cache",
+    ".ruff_cache",
+    "node_modules",
+    "site-packages",
+    "dist",
+    "build",
+}
 
 
 def get_all_files_on_disk():
@@ -95,6 +113,7 @@ def get_reviewable_files(files, ignore_paths=()):
             path.suffix == ".py"
             and not is_generated(path)
             and not is_ignored(file, ignore_paths)
+            and not any(part in DISK_SKIP_DIRS for part in path.parts)
             and path.exists()
         ):
             reviewable.append(str(path))
