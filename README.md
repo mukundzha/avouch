@@ -18,7 +18,13 @@ avouch
 
 ---
 
-## Read why this exists: https://dev.to/mukund_zha/i-built-a-python-code-reviewer-that-only-reviews-the-code-you-changed-2hl5
+## Why I built this
+
+I was paying for an AI code reviewer that spent half its report on
+legacy code I never wrote, and queued my actual diffs behind everyone
+else's. I wanted a reviewer that only looks at the code I'm about to
+push, runs locally in the seconds before `git push`, and costs nothing.
+So I built one.
 
 
 ## Installation
