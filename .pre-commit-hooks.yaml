@@ -1,0 +1,9 @@
+- id: avouch
+  name: avouch
+  description: Review the Python you changed — diff-only, local, zero dependencies.
+  entry: avouch --staged
+  language: python
+  language_version: python3
+  types: [python]
+  pass_filenames: false
+  minimum_pre_commit_version: "2.9.0"

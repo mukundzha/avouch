@@ -292,6 +292,30 @@ whole checked-out repository with `--all-files --json`.
 
 ---
 
+## Pre-commit hook
+
+Add Avouch to `pre-commit` so every commit reviews only what you're about to commit:
+
+```yaml
+# .pre-commit-config.yaml
+repos:
+  - repo: https://github.com/mukundzha/avouch
+    rev: v0.3.2
+    hooks:
+      - id: avouch
+```
+
+Then:
+
+```bash
+pip install pre-commit
+pre-commit install
+```
+
+`pass_filenames: false` — Avouch computes the review set itself via `git diff --cached`; no file list is passed twice. Baseline suppression (when configured) composes automatically; findings already baselined don't fail the hook. Use `git commit --no-verify` to bypass.
+
+---
+
 ## Other CI systems
 
 Avouch is a plain console command with a documented exit code, so any CI
