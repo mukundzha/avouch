@@ -99,11 +99,27 @@ def render_json(function_reports, file_reports, class_reports):
     )
 
 
-def render_diff_view(file_paths):
+def render_diff_view(file_paths, function_reports=None, file_reports=None, class_reports=None):
 
     _set_font()
     print(_style("[CHANGED FILES]", _BOLD))
     print()
+
+    _annotation_map = None
+    _source_cache = {}
+    if function_reports is not None or file_reports is not None or class_reports is not None:
+        try:
+            _annotation_map = _build_annotation_map(
+                function_reports or [], file_reports or [], class_reports or []
+            )
+            for _fp in file_paths:
+                try:
+                    _source_cache[_fp] = Path(_fp).read_text(encoding="utf-8").splitlines()
+                except Exception:
+                    _source_cache[_fp] = []
+        except Exception:
+            _annotation_map = None
+            _source_cache = {}
 
     for index, file_path in enumerate(file_paths):
 
@@ -125,6 +141,15 @@ def render_diff_view(file_paths):
         )
         print(_style(_INDENT + "─" * max(_LINE_WIDTH - 2, 12), _DIM))
 
+        _file_ann = _annotation_map.get(file_path) if _annotation_map else None
+        if _file_ann is not None and (_file_ann["by_line"] or _file_ann["file_level"]):
+            try:
+                _render_diff_with_annotations(
+                    hunks, labels, _file_ann, _source_cache.get(file_path, [])
+                )
+                continue
+            except Exception:
+                pass
         for hunk in hunks:
             _render_hunk(hunk, labels)
 
@@ -221,6 +246,113 @@ def _render_hunk(hunk, labels):
             print(_style(_INDENT + _INDENT + "- " + text, _RED))
         else:
             print(_INDENT + _INDENT + "  " + text)
+
+
+def _build_annotation_map(function_reports, file_reports, class_reports):
+    try:
+        issues_by_file = {}
+        for report in [*class_reports, *function_reports, *file_reports]:
+            if not report.get("issues"):
+                continue
+            file_name = report.get("file", report["name"])
+            bucket = issues_by_file.setdefault(file_name, [])
+            for issue in report["issues"]:
+                bucket.append(
+                    (
+                        report["name"],
+                        report["kind"],
+                        issue["message"],
+                        issue["severity"],
+                        issue.get("rule"),
+                        report.get("line"),
+                    )
+                )
+        result = {}
+        for file_name, entries in issues_by_file.items():
+            try:
+                rows = _issue_rows(entries)
+            except Exception:
+                rows = []
+            by_line = {}
+            file_level = []
+            for row in rows:
+                _item, _rid, _rname, _metric, _is_err, _line, _msg = row
+                if _line is None or _item == "file":
+                    file_level.append(row)
+                else:
+                    by_line.setdefault(_line, []).append(row)
+            result[file_name] = {"by_line": by_line, "file_level": file_level}
+        return result
+    except Exception:
+        return {}
+
+
+def _render_annotation(row, source_lines, orphan_line=None):
+    try:
+        item_name, rule_id, rule_name, _metric, is_error, line, message = row
+        display_line = orphan_line if orphan_line is not None else line
+        col = -1
+        if orphan_line is None and source_lines and line and item_name != "file":
+            try:
+                if 1 <= line <= len(source_lines):
+                    col = source_lines[line - 1].find(item_name)
+            except Exception:
+                col = -1
+        base = _INDENT + _INDENT + "  "
+        rule = rule_id or ""
+        if orphan_line is not None:
+            prefix = f"line {display_line}: "
+            caret = "→"
+            print(base + _style(caret, _BLUE) + " " + prefix + (_style(rule, _BLUE) + ": " if rule else "") + (_style(message, _RED) if is_error else _style(message, _DIM)))
+            return
+        if col != -1:
+            caret = " " * col + "^" * len(item_name) if item_name and item_name != "file" else "→"
+            print(base + _style(caret, _BLUE) + " " + (_style(rule, _BLUE) + ": " if rule else "") + (_style(message, _RED) if is_error else _style(message, _DIM)))
+        else:
+            caret = "→"
+            print(base + _style(caret, _BLUE) + " " + (_style(rule, _BLUE) + ": " if rule else "") + (_style(message, _RED) if is_error else _style(message, _DIM)))
+    except Exception:
+        try:
+            print(_INDENT + _INDENT + "  " + _style("→ ", _BLUE) + str(row))
+        except Exception:
+            pass
+
+
+def _render_hunk_annotated(hunk, labels, by_line, source_lines):
+    current_label = None
+    for tag, line_number, text in hunk:
+        if tag != "del":
+            label = labels.get(line_number) if line_number is not None else None
+            if label and label != current_label:
+                print(_style(_INDENT + _INDENT + "  " + label, _DIM))
+                current_label = label
+        if tag == "add":
+            print(_style(_INDENT + _INDENT + "+ " + text, _GREEN))
+        elif tag == "del":
+            print(_style(_INDENT + _INDENT + "- " + text, _RED))
+        else:
+            print(_INDENT + _INDENT + "  " + text)
+        if tag != "del" and line_number is not None and line_number in by_line:
+            for row in by_line[line_number]:
+                _render_annotation(row, source_lines)
+
+
+def _render_diff_with_annotations(hunks, labels, file_ann, source_lines):
+    displayed = set()
+    for hunk in hunks:
+        for tag, ln, _ in hunk:
+            if ln is not None:
+                displayed.add(ln)
+    for hunk in hunks:
+        _render_hunk_annotated(hunk, labels, file_ann.get("by_line", {}), source_lines)
+    for row in file_ann.get("file_level", []):
+        _render_annotation(row, source_lines)
+    orphan = [ln for ln in file_ann.get("by_line", {}) if ln not in displayed]
+    if orphan:
+        print(_style(_INDENT + _INDENT + f"  · {len(orphan)} finding(s) outside diff context:", _DIM))
+        for ln in sorted(orphan):
+            for row in file_ann["by_line"][ln]:
+                _render_annotation(row, source_lines, orphan_line=ln)
 
 
 def _context_labels(file_path):

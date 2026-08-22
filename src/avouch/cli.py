@@ -236,7 +236,10 @@ def _main(argv=None):
         render_json(functions_reports, file_reports, class_reports)
     elif not args.quiet:
         if args.changed:
-            render_diff_view(reviewable_files)
+            try:
+                render_diff_view(reviewable_files, functions_reports, file_reports, class_reports)
+            except Exception:
+                render_diff_view(reviewable_files)
         else:
             generate_report(functions_reports, file_reports, class_reports)
 
