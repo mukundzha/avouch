@@ -4,6 +4,27 @@ All notable changes to this project will be documented in this file.
 
 The format is inspired by Keep a Changelog.
 
+## [0.3.3] - 2026-08-23
+
+### Added
+- `avouch init`: measure repo maxima and write `avouch.toml` clean-by-construction (`measured+1`, `--dry-run`).
+- `avouch baseline`: snapshot findings to `.avouch/baseline.json` (`rule+file+name+line` fingerprint), filter before render/exit, `--no-baseline` to bypass; `BY RULE (+N suppressed)` and `--verbose` suppressed count.
+- Parallel review: `ProcessPoolExecutor` for `>8` files (`AVOUCH_WORKERS`/`SCRUT_WORKERS`, `min(cpu,8)`), order-preserved, serial fallback for small diffs.
+- CI-native formats: `--format github` (`::warning/::error file=,line=,col=,title=`) and `--format sarif` (SARIF 2.1.0 with `tool.driver.rules` and `physicalLocation` spans); mutually exclusive with `--json`/`--changed`.
+- `avouch rule [ID]`: per-rule help from single `RULES` registry in `utility/docs.py` (SCR001-017 + complexity), `avouch rule` lists all, unknown → exit 2.
+- Pre-commit hook: `.pre-commit-hooks.yaml` (`avouch --staged`, `pass_filenames: false`).
+- Diff annotations: `avouch --changed` now annotates findings inline at hunk lines with caret/column, handling orphans and file-level.
+
+### Changed
+- Configuration hardening: `avouch.toml` discovered by walking upward from CWD to FS root, `limits` must be positive ints, `rules` booleans, `ignore_paths` list of strings; unknown keys ignored; malformed/invalid → `error: invalid avouch.toml configuration` exit 2 with key, never `internal error`.
+- `avouch --verbose` now shows resolved config path (`config: <resolved-path>`) and baseline suppressed count.
+- Report `BY RULE` now shows `(+N suppressed)` and `PASSED` grid still capped.
+- `README.md` slimmed to landing (496w); full docs live in `avouch --docs` (`utility/docs.py`).
+
+### Fixed
+- `avouch rule` and `--format` help and error hints now correctly short-circuit before config/git.
+- Column calculation for `github`/`sarif` now correctly finds `def`/`class` name (col 5 for `def f`, 7 for `class Foo`) instead of first `f` in `def`.
+
 ## [0.3.2]
 
 ### Added

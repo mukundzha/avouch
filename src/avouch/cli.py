@@ -23,7 +23,7 @@ ERROR = 2
 try:
     AVOUCH_VERSION = importlib.metadata.version("avouch")
 except importlib.metadata.PackageNotFoundError:
-    AVOUCH_VERSION = "0.3.2"
+    AVOUCH_VERSION = "0.3.3"
 
 
 def _nothing_to_review_hint(args, candidate_files):

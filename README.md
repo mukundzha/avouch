@@ -73,11 +73,8 @@ Use `--all-files` in CI (fresh checkout has no diff).
 ## Pre-commit
 
 ```yaml
-repos: [{repo: https://github.com/mukundzha/avouch, rev: v0.3.2, hooks: [{id: avouch}]}]
-# .pre-commit-hooks.yaml: entry avouch --staged, pass_filenames: false
+repos: [{repo: https://github.com/mukundzha/avouch, rev: v0.3.3, hooks: [{id: avouch}]}]
 ```
-
-Baselined findings don't fail the hook.
 
 ## Baseline
 
@@ -87,31 +84,23 @@ avouch                 # only new findings
 avouch --no-baseline   # show all
 ```
 
-Fingerprint `rule+file+name+line` (moving re-flags). Commit `.avouch/baseline.json`. `--verbose` shows suppressed count, `BY RULE` shows `(+N suppressed)`. Malformed → exit 2.
-
-## Other CI
-
-Any CI: `pip install avouch` → `avouch --all-files --json` → check exit code.
+Fingerprint `rule+file+name+line`. Commit `.avouch/baseline.json`. `--verbose` shows suppressed, `BY RULE` shows `(+N suppressed)`.
 
 ## Configuration
 
-`avouch.toml` discovered by walking upward from CWD to FS root (so `tests/` uses root config), optional/partial, merged over defaults. Invalid `limits` (must be positive int), `rules` (bool), `ignore_paths` (list[str]) → `error: invalid avouch.toml configuration` exit 2.
+`avouch.toml` walks upward from CWD to root, optional/partial, merged over defaults. Invalid `limits`/`rules`/`ignore_paths` → `error: invalid avouch.toml configuration` exit 2.
 
 ```toml
-[limits]
-max_parameters = 8
-[rules]
-nested_function = false
+[limits] max_parameters = 8
+[rules] nested_function = false
 ignore_paths = ["tests"]
 ```
 
-Limits and toggles are all `true` by default; see `avouch --docs` for full table. `--ignore-path` appends to `ignore_paths`. No env vars.
+See `avouch --docs` for full table. `--ignore-path` appends. No env vars.
 
 ## How it works
 
-`cli.py` only orchestrates. Pipeline: `load_config` → `git` review set → `analyzer.analyze_file` (ast + walk cache + rules) → `baseline.filter` → `report` (or `--json`/`--changed`/`--quiet`). `--docs`/`--version` short-circuit.
-
-See `avouch --docs` for mermaid diagrams and full pipeline.
+`cli.py` only orchestrates. Pipeline: `load_config` → `git` review set → `analyzer` → `baseline` → `report`/`--json`/`--changed`. See `avouch --docs` for diagrams.
 
 ## Layout
 

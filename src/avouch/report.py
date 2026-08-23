@@ -162,7 +162,7 @@ def render_sarif(function_reports, file_reports, class_reports):
     try:
         version = importlib.metadata.version("avouch")
     except Exception:
-        version = "0.3.2"
+        version = "0.3.3"
 
     violations = _collect_violations(function_reports, file_reports, class_reports)
 

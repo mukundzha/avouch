@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "avouch"
-version = "0.3.2"
+version = "0.3.3"
 description = "Git-aware Python static code review CLI powered by AST analysis."
 readme = "README.md"
 requires-python = ">=3.10"
