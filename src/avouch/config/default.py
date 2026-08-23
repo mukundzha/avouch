@@ -23,18 +23,6 @@ DEFAULT_LIMITS = {
 
 def load_limits():
 
-    limits = DEFAULT_LIMITS.copy()
+    from avouch.config.loader import load_config
 
-    config_path = Path("avouch.toml")
-
-    if not config_path.exists():
-        return limits
-
-    with config_path.open("rb") as f:
-        config = tomllib.load(f)
-
-    for key, value in config.items():
-        if key in limits:
-            limits[key] = value
-
-    return limits
+    return load_config()["limits"]

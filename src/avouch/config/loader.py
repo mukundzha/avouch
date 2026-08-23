@@ -31,29 +31,64 @@ DEFAULT_IGNORE_PATHS = []
 _load_cache = {}
 
 
-def load_config():
+def find_config_path(start=None):
+    cur = (start or Path.cwd()).resolve()
+    for parent in [cur, *cur.parents]:
+        candidate = parent / CONFIG_FILE
+        if candidate.is_file():
+            return candidate
+    return None
 
-    config_path = Path(CONFIG_FILE)
 
-    if not config_path.exists():
-        return {"limits": DEFAULT_LIMITS, "rules": DEFAULT_RULES, "ignore_paths": DEFAULT_IGNORE_PATHS}
+def _validate_limits(user_limits):
+    if not isinstance(user_limits, dict):
+        raise ValueError(f"limits must be a table; got {type(user_limits).__name__}")
+    for k, v in list(user_limits.items()):
+        if k not in DEFAULT_LIMITS:
+            continue
+        if isinstance(v, bool) or not isinstance(v, int):
+            raise ValueError(f"limits.{k} must be a positive integer; got {v!r}")
+        if v <= 0:
+            raise ValueError(f"limits.{k} must be a positive integer; got {v!r}")
+
+
+def _validate_rules(user_rules):
+    if not isinstance(user_rules, dict):
+        raise ValueError(f"rules must be a table; got {type(user_rules).__name__}")
+    for k, v in list(user_rules.items()):
+        if k not in DEFAULT_RULES:
+            continue
+        if not isinstance(v, bool):
+            raise ValueError(f"rules.{k} must be a boolean; got {v!r}")
+
+
+def load_config(start=None):
+
+    config_path = find_config_path(start)
+
+    if config_path is None:
+        return {"limits": DEFAULT_LIMITS.copy(), "rules": DEFAULT_RULES.copy(), "ignore_paths": DEFAULT_IGNORE_PATHS.copy(), "_config_path": None}
 
     stat = config_path.stat()
 
-    key = (str(config_path), stat.st_mtime_ns, stat.st_size)
+    key = (str(config_path.resolve()), stat.st_mtime_ns, stat.st_size)
 
     cached = _load_cache.get(key)
 
     if cached is not None:
         return cached
 
-    with open(config_path, "rb") as file:
-        config = tomllib.load(file)
+    try:
+        with open(config_path, "rb") as file:
+            config = tomllib.load(file)
+    except tomllib.TOMLDecodeError as exc:
+        raise ValueError(f"invalid TOML: {exc}") from exc
 
     merged_config = {
         "limits": merge_limits(config.get("limits", {})),
         "rules": merge_rules(config.get("rules", {})),
         "ignore_paths": merge_ignore_paths(config.get("ignore_paths", [])),
+        "_config_path": str(config_path.resolve()),
     }
 
     _load_cache[key] = merged_config
@@ -63,28 +98,39 @@ def load_config():
 
 def merge_limits(user_limits):
 
+    _validate_limits(user_limits)
+
     merged_limits = DEFAULT_LIMITS.copy()
 
-    merged_limits.update(user_limits)
+    for k, v in user_limits.items():
+        if k in DEFAULT_LIMITS:
+            merged_limits[k] = v
 
     return merged_limits
 
 def merge_rules(user_rules):
 
+    _validate_rules(user_rules)
+
     merged_rules = DEFAULT_RULES.copy()
 
-    merged_rules.update(user_rules)
+    for k, v in user_rules.items():
+        if k in DEFAULT_RULES:
+            merged_rules[k] = v
 
     return merged_rules
 
 def merge_ignore_paths(user_ignore_paths):
 
     if not isinstance(user_ignore_paths, list):
-        raise ValueError("ignore_paths in avouch.toml must be a list of paths")
+        raise ValueError("ignore_paths must be a list of strings")
+
+    for i, p in enumerate(user_ignore_paths):
+        if not isinstance(p, str):
+            raise ValueError(f"ignore_paths[{i}] must be a string; got {p!r}")
 
     merged = DEFAULT_IGNORE_PATHS.copy()
 
     merged.extend(user_ignore_paths)
 
     return merged
-

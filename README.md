@@ -95,7 +95,7 @@ Any CI: `pip install avouch` → `avouch --all-files --json` → check exit code
 
 ## Configuration
 
-`avouch.toml` in CWD only, optional/partial, merged over defaults.
+`avouch.toml` discovered by walking upward from CWD to FS root (so `tests/` uses root config), optional/partial, merged over defaults. Invalid `limits` (must be positive int), `rules` (bool), `ignore_paths` (list[str]) → `error: invalid avouch.toml configuration` exit 2.
 
 ```toml
 [limits]

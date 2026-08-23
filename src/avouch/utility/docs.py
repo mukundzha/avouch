@@ -23,8 +23,8 @@ WORKFLOW
 --------
 Git repository -> changed .py files -> ast.parse -> rules -> findings
 
-1. Load configuration: a avouch.toml in the current directory, if
-   present, merged over the built-in defaults
+1. Load configuration: avouch.toml discovered by walking upward from
+   CWD to filesystem root, if present, merged over built-in defaults
    (src/avouch/config/loader.py, src/avouch/config/default.py).
 2. Verify the working directory is a Git repository
    (git rev-parse --is-inside-work-tree). Otherwise print
@@ -116,10 +116,10 @@ Only one of --changed/--staged/--all-files; --json/--verbose/--quiet combine wit
 
 CONFIGURATION
 -------------
-Configuration lives in avouch.toml in the current working directory
-(no upward search). It is optional and partial: any subset is merged
-over the built-in defaults. A malformed file raises instead of being
-silently ignored.
+Configuration is avouch.toml discovered by walking upward from CWD to
+filesystem root (so a run from tests/ uses repo-root avouch.toml).
+Optional and partial: any subset merged over built-in defaults. Malformed
+or invalid values raise instead of being silently ignored.
 
 Sections:
 
@@ -164,15 +164,14 @@ from avouch.toml.
 
 Setting a toggle to false disables that rule's findings.
 
-Observe whether the file was loaded with --verbose: the first
-diagnostics line prints "config: avouch.toml, N ignore path(s)" (or
-"config: defaults (no avouch.toml), 0 ignore path(s)" without a file).
+Check load with --verbose: "config: <resolved-path>, N ignore path(s)"
+(or "config: defaults (no avouch.toml), 0 ignore path(s)" without a file).
 
-Malformed TOML or a non-list ignore_paths prints
+Malformed TOML, non-list ignore_paths, or invalid limits/rules prints
 "error: invalid avouch.toml configuration: ..." and exits 2. Unknown
-keys are accepted and ignored silently - a typo is silently
-ineffective. Limit values are not type-checked: a non-numeric limit
-fails at analysis time with an internal error (exit 2).
+keys are ignored silently. Limits must be positive integers, rules
+booleans, ignore_paths list of strings (e.g. limits.max_parameters
+must be a positive integer; got "eight").
 
 The CLI only appends --ignore-path to ignore_paths; there is no flag
 for [limits] or [rules]. Configuration applies equally to every review

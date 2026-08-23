@@ -142,7 +142,7 @@ def _main(argv=None):
         config = load_config()
     except ValueError as exc:
         print(f"error: invalid avouch.toml configuration: {exc}", file=sys.stderr)
-        print("hint: check the [limits], [rules], and ignore_paths sections", file=sys.stderr)
+        print(f"hint: check the [limits], [rules], and ignore_paths sections ({exc})", file=sys.stderr)
         return ERROR
 
     rules = config.get("rules", DEFAULT_RULES)
@@ -186,9 +186,10 @@ def _main(argv=None):
         print(f"hint: {_nothing_to_review_hint(args, candidate_files)}", file=sys.stderr)
         return ERROR
 
+    cfg_label = config.get("_config_path") or "defaults (no avouch.toml)"
     vlog(
         args.verbose,
-        f"config: {'avouch.toml' if Path('avouch.toml').exists() else 'defaults (no avouch.toml)'}, "
+        f"config: {cfg_label}, "
         f"{len(ignore_paths)} ignore path(s)", 
     )
     if args.verbose and ignore_paths:
@@ -362,7 +363,7 @@ def _cmd_init(args):
         config = load_config()
     except ValueError as exc:
         print(f"error: invalid avouch.toml configuration: {exc}", file=sys.stderr)
-        print("hint: check the [limits], [rules], and ignore_paths sections", file=sys.stderr)
+        print(f"hint: check the [limits], [rules], and ignore_paths sections ({exc})", file=sys.stderr)
         return ERROR
 
     files = get_reviewable_files(get_all_files_on_disk(), config["ignore_paths"])
@@ -413,7 +414,7 @@ def _cmd_baseline(args):
         config = load_config()
     except ValueError as exc:
         print(f"error: invalid avouch.toml configuration: {exc}", file=sys.stderr)
-        print("hint: check the [limits], [rules], and ignore_paths sections", file=sys.stderr)
+        print(f"hint: check the [limits], [rules], and ignore_paths sections ({exc})", file=sys.stderr)
         return ERROR
 
     files = get_reviewable_files(get_all_files_on_disk(), config["ignore_paths"])
