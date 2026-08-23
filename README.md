@@ -20,11 +20,7 @@ avouch
 
 ## Why I built this
 
-I was paying for an AI code reviewer that spent half its report on
-legacy code I never wrote, and queued my actual diffs behind everyone
-else's. I wanted a reviewer that only looks at the code I'm about to
-push, runs locally in the seconds before `git push`, and costs nothing.
-So I built one.
+Paid AI reviewers wasted half their report on legacy I never wrote and queued my diffs. I wanted a local, diff-only check that runs seconds before `git push` — so I built Avouch.
 
 
 ## Installation
@@ -83,13 +79,9 @@ PASSED
   ✓ src/util.py
 ```
 
-Each finding is compiler-style: `file:line`, the rule id and message,
-the offending code with dimmed line numbers, a caret under the flagged
-name. Then a BY RULE tally and a PASSING list for the clean files.
-Duplicate `(component, rule)` findings collapse to one row per file, so
-overlapping rule IDs (SCR004 / SCR006) stay readable.
+Findings are compiler-style (`file:line` + caret) with a BY RULE tally and PASSING list. Duplicates `(component, rule)` collapse per file.
 
-A clean run is shorter:
+A clean run:
 
 ```text
 $ avouch
@@ -181,20 +173,9 @@ avouch --json
 }
 ```
 
-Each violation carries the rule id (or a human-readable label when the
-finding has none), its severity, the message, the file, the component name,
-its kind (`func`, `class`, or `file`), and the line the finding refers to
-(`null` for file-level findings) — the same component and kind shown in
-the human table. `files_with_violations` is the number of distinct
-files containing at least one violation.
+Each violation has `rule` (or label), `severity`, `message`, `file`, `name`, `kind` (`func`/`class`/`file`), and `line` (`null` for file-level). `files_with_violations` counts distinct files.
 
-The document is a stable, versioned contract for automation: `version`
-is the schema version (independent of the Avouch package version), `tool`
-identifies the emitter, and the same input always produces the same JSON
-— no colors, timestamps, or diagnostics leak in. Exit codes behave
-exactly as in normal mode, so `avouch --json` can gate CI: parse stdout
-for the findings and react to the exit status (`0` clean, `1` violations,
-`2` Avouch error).
+Stable contract: `version` is schema version, `tool` identifies emitter. Deterministic JSON — no colors/timestamps. Same exit codes, so `avouch --json` can gate CI.
 
 ---
 
@@ -244,15 +225,9 @@ jobs:
         run: avouch --all-files --json
 ```
 
-- `actions/checkout` puts the pull request's code in the runner's working
-  tree — Avouch analyzes the files that checkout provided, nothing more.
-- `actions/setup-python` provides a Python runtime; Avouch requires
-  Python 3.10+.
-- `python -m pip install avouch` installs the latest published release.
-  Pin a version (`avouch==0.3.1`) for reproducible runs.
-- `avouch --all-files --json` reviews every eligible `.py` file and prints
-  the machine-readable document to the job log. `permissions: contents:
-  read` is the only permission needed — the workflow makes no API calls.
+- `checkout` provides the PR code; Avouch analyzes exactly that checkout.
+- `setup-python` requires Python 3.10+.
+- Pin `avouch==0.3.1` for reproducible runs; `permissions: contents: read` is enough.
 
 ### Why `--all-files`
 

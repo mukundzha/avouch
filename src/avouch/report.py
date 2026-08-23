@@ -53,8 +53,8 @@ def _set_font():
     print(f"\x1b]50;SetFont={font}\x07", end="")
 
 
-def generate_report(function_reports, file_reports, class_reports):
-    render_report(function_reports, file_reports, class_reports)
+def generate_report(function_reports, file_reports, class_reports, suppressed=0):
+    render_report(function_reports, file_reports, class_reports, suppressed)
 
 
 def vlog(verbose, message):
@@ -379,7 +379,7 @@ def _context_labels(file_path):
     return labels
 
 
-def render_report(function_reports, file_reports, class_reports):
+def render_report(function_reports, file_reports, class_reports, suppressed=0):
 
     _set_font()
     print()
@@ -475,7 +475,11 @@ def render_report(function_reports, file_reports, class_reports):
 
     if rule_counts:
         print()
-        _render_rule_summary(rule_counts, rule_labels)
+        _render_rule_summary(rule_counts, rule_labels, suppressed)
+    elif suppressed:
+        print()
+        print(_style("─" * _LINE_WIDTH, _DIM))
+        print(_style(f"(+{suppressed} suppressed by baseline)", _DIM))
 
     passing_files = [
         report["name"]
@@ -547,7 +551,7 @@ def _most_common_first(counts, key):
     return (-counts[key], key)
 
 
-def _render_rule_summary(rule_counts, rule_labels):
+def _render_rule_summary(rule_counts, rule_labels, suppressed=0):
 
     ordered = sorted(rule_counts, key=lambda key: _most_common_first(rule_counts, key))
 
@@ -582,6 +586,9 @@ def _render_rule_summary(rule_counts, rule_labels):
             + " " * (2 + rule_width - _display_width(cell))
             + _style(str(rule_counts[key]).rjust(count_width), _BOLD)
         )
+
+    if suppressed:
+        print(_INDENT + _style(f"(+{suppressed} suppressed by baseline)", _DIM))
 
 
 def render_passing(passing_files):

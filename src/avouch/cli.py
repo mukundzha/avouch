@@ -12,6 +12,7 @@ from avouch.report import generate_report, render_diff_view, render_json, vlog
 from avouch.utility.docs import render_docs
 from avouch.git import is_gitrepo, get_changed_files, get_staged_files, get_all_files, get_all_files_on_disk, get_reviewable_files
 from avouch.utility.measure import measure_maxima
+from avouch.baseline import load_baseline, filter_reports, write_baseline
 
 SUCCESS = 0
 VIOLATIONS_FOUND = 1
@@ -101,16 +102,20 @@ def _main(argv=None):
         action="store_true",
         help="analyze Python files without requiring a Git repository",
     )
-    parser.add_argument("init", nargs="?", const="init", help="bootstrap avouch.toml from the current repository")
+    parser.add_argument("init", nargs="?", const="init", help="init: bootstrap avouch.toml; baseline: snapshot findings to .avouch/baseline.json")
     parser.add_argument("--dry-run", action="store_true", help="print the avouch.toml that init would write without writing it")
+    parser.add_argument("--no-baseline", action="store_true", help="disable baseline suppression")
     args = parser.parse_args(argv)
 
     if args.docs:
         render_docs()
         return SUCCESS
 
-    if args.init:
+    if args.init == "init":
         return _cmd_init(args)
+
+    if args.init == "baseline":
+        return _cmd_baseline(args)
 
     try:
         config = load_config()
@@ -232,6 +237,20 @@ def _main(argv=None):
         file_reports.extend(files)
         class_reports.extend(classes)
 
+    suppressed = 0
+    if not args.no_baseline:
+        try:
+            baseline_set = load_baseline()
+        except ValueError as exc:
+            print(f"error: invalid baseline: {exc}", file=sys.stderr)
+            return ERROR
+        if baseline_set is not None:
+            functions_reports, file_reports, class_reports, suppressed = filter_reports(
+                functions_reports, file_reports, class_reports, baseline_set
+            )
+            if args.verbose and suppressed:
+                vlog(True, f"suppressed {suppressed} finding(s) by baseline")
+
     if args.json:
         render_json(functions_reports, file_reports, class_reports)
     elif not args.quiet:
@@ -241,7 +260,7 @@ def _main(argv=None):
             except Exception:
                 render_diff_view(reviewable_files)
         else:
-            generate_report(functions_reports, file_reports, class_reports)
+            generate_report(functions_reports, file_reports, class_reports, suppressed)
 
     reports = class_reports + functions_reports + file_reports
 
@@ -340,5 +359,48 @@ def _cmd_init(args):
     Path("avouch.toml").write_text(serialized, encoding="utf-8")
 
     print(f"avouch.toml written: measured {len(limits)} maxima across {len(files)} files")
+
+    return SUCCESS
+
+
+def _cmd_baseline(args):
+
+    if args.changed or args.staged or args.all_files or args.not_git:
+        print(
+            "error: baseline cannot be combined with --changed, --staged, --all-files, or --not-git",
+            file=sys.stderr,
+        )
+        return ERROR
+
+    try:
+        config = load_config()
+    except ValueError as exc:
+        print(f"error: invalid avouch.toml configuration: {exc}", file=sys.stderr)
+        print("hint: check the [limits], [rules], and ignore_paths sections", file=sys.stderr)
+        return ERROR
+
+    files = get_reviewable_files(get_all_files_on_disk(), config["ignore_paths"])
+
+    if not files:
+        print("error: nothing to baseline", file=sys.stderr)
+        print("hint: no reviewable .py files found on disk", file=sys.stderr)
+        return ERROR
+
+    rules = config.get("rules", DEFAULT_RULES)
+    limits = config.get("limits", DEFAULT_LIMITS)
+
+    file_reports = []
+    functions_reports = []
+    class_reports = []
+
+    for file_path in files:
+        functions, f_reports, classes = analyze_file(file_path, limits, rules)
+        functions_reports.extend(functions)
+        file_reports.extend(f_reports)
+        class_reports.extend(classes)
+
+    count = write_baseline(functions_reports, file_reports, class_reports)
+
+    print(f"baseline written: {count} finding(s) across {len(files)} files")
 
     return SUCCESS

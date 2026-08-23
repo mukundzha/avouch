@@ -45,9 +45,12 @@ Git repository -> changed .py files -> ast.parse -> rules -> findings
    rest of the review continues.
 5. Run the rules enabled by the config against functions, async
    functions, classes, and files (see REVIEW RULES below).
-6. Print the report: human-readable by default (suppressed with
+6. Baseline filter: load .avouch/baseline.json (mtime cache) and filter
+   before render/exit; --no-baseline bypasses; --verbose logs suppressed;
+   BY RULE shows (+N suppressed).
+7. Print the report: human-readable by default (suppressed with
    --quiet), JSON with --json (src/avouch/report.py).
-7. Exit status: 0 = clean, 1 = findings reported, 2 = Avouch could
+8. Exit status: 0 = clean, 1 = findings reported, 2 = Avouch could
    not run.
 
 ARCHITECTURE
@@ -62,6 +65,7 @@ execution order:
       |-- analyzer.py                read -> ast.parse -> walk cache
       |   `-- rules/*.py             one analyze(node, limits) per rule
       |       `-- utility/walk.py    ast.walk cached per file
+      |-- baseline.py                load/filter/write baseline
       |-- report.py                  terminal report / JSON / diff view
       `-- utility/docs.py            this text
 
@@ -95,20 +99,20 @@ Run inside a Git repository after making changes, before pushing:
 Avouch takes no target path argument: the review set is defined by Git,
 not by the command line.
 
-    avouch --help        argparse help for every option
-    avouch --docs        this documentation; exits without reviewing
-    avouch --version     print the version and exit
-    avouch --verbose     step-by-step review details on stderr
-    avouch --quiet       suppress the normal report; errors and exit codes are unchanged
-    avouch --changed     show added/deleted lines of changed files instead of the report
-    avouch --staged      review only files with staged Git changes
-    avouch --all-files   review every eligible Python file, not just the diff
-    avouch --not-git     review every eligible .py file on disk; Git is not required
+    avouch --help        help
+    avouch --docs        this docs; exit without review
+    avouch --version     version
+    avouch --verbose     details on stderr
+    avouch --quiet       no report; exit code only
+    avouch --changed     diff view of changed files
+    avouch --staged      staged only
+    avouch --all-files   every eligible file
+    avouch --not-git     walk CWD; no Git needed
+    avouch baseline      snapshot findings to .avouch/baseline.json
+    avouch --no-baseline ignore baseline
 
-Only one of --changed, --staged, and --all-files may be given; the
-output flags --json, --verbose, and --quiet combine with any scope.
---not-git cannot be combined with --changed or --staged, which require
-Git history.
+Only one of --changed/--staged/--all-files; --json/--verbose/--quiet combine with any scope;
+--not-git conflicts with --changed/--staged.
 
 CONFIGURATION
 -------------
@@ -207,6 +211,17 @@ Example - the exact avouch.toml this repository lives by:
     max_lambda_nodes = true
     max_large_comprehensions = true
     mutable_default_args = true
+
+BASELINE
+--------
+Snapshot hides legacy: `avouch baseline` runs a full review and writes
+`.avouch/baseline.json` `{"version":1,"findings":[{"rule","file","name","line"}]}`
+with fingerprint `rule+file+name+line` (moving a function re-flags). Commit
+it like `avouch.toml`. Next runs filter before render and before exit code;
+`--no-baseline` bypasses; `--verbose` logs suppressed count and `BY RULE`
+shows `(+N suppressed)`. Idempotent, recomputes from scratch. Malformed
+JSON or wrong version prints `error: invalid baseline:` and exits 2. No file
+means no suppression.
 
 REVIEW RULES
 ------------
