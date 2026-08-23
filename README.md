@@ -41,7 +41,7 @@ All clean.
 
 Compiler-style `file:line` + caret, `BY RULE` tally, capped `PASSED` grid.
 
-Flags: `--json` `--docs` `--changed` `--staged` `--all-files` `--not-git` `--quiet` `--verbose` `baseline` `--no-baseline`
+Flags: `--json` `--docs` `--changed` `--staged` `--all-files` `--not-git` `--quiet` `--verbose` `baseline` `--no-baseline` `rule`
 
 Review set = changed + untracked `.py`; skips deleted/non-py/generated. Exit `0` clean, `1` findings, `2` error. `avouch --docs` is the docs of record (TTY browser, piped plain).
 

@@ -6,9 +6,260 @@ Every statement here describes behavior implemented in this repository.
 
 import shutil
 import sys
+import textwrap
 
-DOCS = """\
-AVOUCH - Git-aware AST code review for the Python you changed
+RULES = {
+    "SCR001": {
+        "name": "async function without await",
+        "description": 'An "async def" whose body contains no "await" runs synchronously at event-loop cost; use a plain function.',
+        "why": "Async functions without await waste event-loop overhead.",
+        "example_bad": "async def fetch():\n    return 42",
+        "example_good": "def fetch():\n    return 42",
+        "config_key": "async_without_await",
+        "scope": "async functions only",
+        "severity": "WARNING",
+    },
+    "SCR002": {
+        "name": "bare except",
+        "description": 'An "except:" handler catches every exception, including KeyboardInterrupt and SystemExit.',
+        "why": "Catches too much; hide interrupts.",
+        "example_bad": "try:\n    do()\nexcept:\n    pass",
+        "example_good": "try:\n    do()\nexcept ValueError:\n    pass",
+        "config_key": "bare_except",
+        "scope": "functions",
+        "severity": "WARNING",
+    },
+    "SCR003": {
+        "name": "boolean expression too complex",
+        "description": 'One and/or chain with too many operands; nested chains sum, so "a and (b or c)" scores 3.',
+        "why": "Hard to reason; split condition.",
+        "example_bad": "if a and b and c and d and e and f:\n    pass",
+        "example_good": "if all([a, b, c]):\n    pass",
+        "config_key": "max_boolean_conditions",
+        "limit_key": "max_boolean_conditions",
+        "scope": "funcs + classes",
+        "severity": "WARNING",
+    },
+    "SCR004": {
+        "name": "duplicate branch (functions)",
+        "description": "if/elif branches with identical bodies - copy-paste or condition never varies. Trailing else not compared.",
+        "why": "Duplicated logic suggests bug.",
+        "example_bad": "if x == 1:\n    do()\nelif x == 2:\n    do()",
+        "example_good": "if x in (1, 2):\n    do()",
+        "config_key": "detect_duplicateb",
+        "scope": "funcs",
+        "severity": "WARNING",
+    },
+    "SCR005": {
+        "name": "large comprehension",
+        "description": "A list/set/dict comprehension or generator expression with more AST nodes than the limit.",
+        "why": "Unreadable; extract helper.",
+        "example_bad": "[x for x in data if cond for y in x for z in y]",
+        "example_good": "result = []\nfor x in data:\n    if cond:\n        result.append(x)",
+        "config_key": "max_large_comprehensions",
+        "limit_key": "max_large_comprehensions",
+        "scope": "functions",
+        "severity": "WARNING",
+    },
+    "SCR006": {
+        "name": "duplicate branch (classes)",
+        "description": "if/elif branches with identical bodies - copy-paste or condition never varies. Trailing else not compared.",
+        "why": "Duplicated logic suggests bug.",
+        "example_bad": "if x == 1:\n    do()\nelif x == 2:\n    do()",
+        "example_good": "if x in (1, 2):\n    do()",
+        "config_key": "empty_except",
+        "scope": "funcs + classes",
+        "severity": "WARNING",
+    },
+    "SCR007": {
+        "name": "long if/elif chain",
+        "description": "One if/elif chain longer than the limit.",
+        "why": "Too many branches; use dispatch.",
+        "example_bad": "if a:\n    pass\nelif b:\n    pass\nelif c:\n    pass\nelif d:\n    pass\nelif e:\n    pass\nelif f:\n    pass",
+        "example_good": "handlers = {a: fn1, b: fn2}\nhandlers.get(x, default)()",
+        "config_key": "max_if_else_chain",
+        "limit_key": "max_if_chain",
+        "scope": "funcs + classes",
+        "severity": "WARNING",
+    },
+    "SCR008": {
+        "name": "lambda too complex",
+        "description": "A lambda whose body has more AST nodes than the limit.",
+        "why": "Unreadable; use def.",
+        "example_bad": "fn = lambda x: (x and y or z and w and v)",
+        "example_good": "def fn(x):\n    return x and y",
+        "config_key": "max_lambda_nodes",
+        "limit_key": "max_lambda_nodes",
+        "scope": "functions",
+        "severity": "WARNING",
+    },
+    "SCR009": {
+        "name": "too many local variables",
+        "description": "More distinct assigned names than the limit; measured on plain assignment targets only. Assignments inside nested functions count toward enclosing.",
+        "why": "Too much state; split function.",
+        "example_bad": "def f():\n    a=b=c=d=e=f=g=h=i=j=k=l=m=n=o=p=q=r=s=t=u=v=w=x=y=z=1",
+        "example_good": "def f():\n    data = {}\n    return data",
+        "config_key": "max_local_variables",
+        "limit_key": "max_local_variables",
+        "scope": "functions",
+        "severity": "WARNING",
+    },
+    "SCR010": {
+        "name": "class too large",
+        "description": "Class line span exceeds max_class_lines (200).",
+        "why": "Too large; split responsibilities.",
+        "example_bad": "class Big:\n    # 250 lines",
+        "example_good": "class Small:\n    pass",
+        "config_key": "max_class_lines",
+        "limit_key": "max_class_lines",
+        "scope": "classes",
+        "severity": "WARNING",
+    },
+    "SCR011": {
+        "name": "file too large",
+        "description": "File line count exceeds max_file_lines (1000).",
+        "why": "Split into modules.",
+        "example_bad": "# 1200 line file",
+        "example_good": "# split file",
+        "config_key": "max_file_lines",
+        "limit_key": "max_file_lines",
+        "scope": "files",
+        "severity": "WARNING",
+    },
+    "SCR012": {
+        "name": "function too long",
+        "description": "Function line span exceeds max_function_lines (300).",
+        "why": "Too long; extract helpers.",
+        "example_bad": "def f():\n    # 400 lines",
+        "example_good": "def f():\n    helper()",
+        "config_key": "max_function_lines",
+        "limit_key": "max_function_lines",
+        "scope": "functions",
+        "severity": "WARNING",
+    },
+    "SCR013": {
+        "name": "nesting too deep",
+        "description": "Maximum depth of block nodes (if/for/async for/while/with/async with/try/match) exceeds max_nesting (5). Comprehensions, lambdas, nested defs add no depth; sibling blocks do not stack.",
+        "why": "Deep nesting hard to follow.",
+        "example_bad": "if a:\n    if b:\n        if c:\n            if d:\n                if e:\n                    if f:\n                        pass",
+        "example_good": "if not a: return\nif not b: return",
+        "config_key": "max_nesting",
+        "limit_key": "max_nesting",
+        "scope": "funcs+classes",
+        "severity": "WARNING",
+    },
+    "SCR014": {
+        "name": "too many parameters",
+        "description": "Declared positional/keyword parameters exceed max_parameters (5). *args and **kwargs are not counted.",
+        "why": "Too many args; group into dataclass/dict.",
+        "example_bad": "def f(a, b, c, d, e, f):\n    pass",
+        "example_good": "def f(opts):\n    pass",
+        "config_key": "max_parameters",
+        "limit_key": "max_parameters",
+        "scope": "functions",
+        "severity": "WARNING",
+    },
+    "SCR015": {
+        "name": "nested function definition",
+        "description": "A function defined inside another function, recreated inside the outer call. Only plain defs are flagged; a nested async def is not.",
+        "why": "Recreated per call; hoist.",
+        "example_bad": "def outer():\n    def inner():\n        pass",
+        "example_good": "def inner():\n    pass\ndef outer():\n    inner()",
+        "config_key": "nested_function",
+        "scope": "functions",
+        "severity": "WARNING",
+    },
+    "SCR016": {
+        "name": "too many return statements",
+        "description": 'More "return" statements than max_return_statements (6). Returns inside nested functions count toward enclosing.',
+        "why": "Too many exits; simplify.",
+        "example_bad": "def f(x):\n    if a: return 1\n    if b: return 2\n    if c: return 3\n    if d: return 4\n    if e: return 5\n    if f: return 6\n    if g: return 7",
+        "example_good": "def f(x):\n    return mapping.get(x, 0)",
+        "config_key": "max_return_statements",
+        "limit_key": "max_return_statements",
+        "scope": "functions",
+        "severity": "WARNING",
+    },
+    "SCR017": {
+        "name": "mutable default argument",
+        "description": "A default parameter value that is a mutable literal ([], {}, {..}) or a mutable constructor call (list(), dict(), set(), bytearray(), defaultdict(), OrderedDict()). Defaults are evaluated once at definition time, so the same object is shared across every call that omits the argument. Use None and construct inside.",
+        "why": "Shared mutable default bug.",
+        "example_bad": "def f(items=[]):\n    items.append(1)",
+        "example_good": "def f(items=None):\n    if items is None:\n        items = []",
+        "config_key": "mutable_default_args",
+        "scope": "functions",
+        "severity": "WARNING",
+    },
+    "CPLX": {
+        "name": "function or class too complex",
+        "description": "McCabe cyclomatic complexity: base 1, plus 1 for each if/for/async for/while/try/except handler/match/ternary/assert/with/async with and each and/or chain - a chain counts 1 no matter how many operands it combines, so \"a and (b or c)\" adds 2; summed over whole subtree. Exceeds max_complexity (40).",
+        "why": "Complex branching; extract.",
+        "example_bad": "def f(x):\n    if a and b or c:\n        for y in x:\n            if y:\n                try:\n                    do()\n                except:\n                    pass",
+        "example_good": "def f(x):\n    helper(x)",
+        "config_key": "max_complexity",
+        "limit_key": "max_complexity",
+        "scope": "funcs + classes",
+        "severity": "WARNING",
+    },
+}
+
+
+def _format_rule(rule_id, spec):
+    lines = []
+    name = spec["name"]
+    lines.append(f"    {rule_id}  {name}")
+    desc = spec["description"]
+    for w in textwrap.wrap(desc, width=76):
+        lines.append(f"            {w}")
+    scope = spec.get("scope")
+    if scope:
+        lines.append(f"            scope: {scope}.")
+    cfg = spec.get("config_key")
+    limit = spec.get("limit_key")
+    if limit:
+        lines.append(f"            config: {limit} ({spec.get('severity','WARNING')}).")
+    elif cfg:
+        lines.append(f"            config: {cfg}.")
+    why = spec.get("why")
+    if why:
+        lines.append(f"            why: {why}")
+    bad = spec.get("example_bad")
+    good = spec.get("example_good")
+    if bad:
+        lines.append(f"            Bad:")
+        for l in bad.splitlines():
+            lines.append(f"                {l}")
+    if good:
+        lines.append(f"            Good:")
+        for l in good.splitlines():
+            lines.append(f"                {l}")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def _rules_section():
+    parts = []
+    parts.append("REVIEW RULES")
+    parts.append("------------")
+    parts.append('Every rule finding is a WARNING. ERROR findings exist only for files')
+    parts.append('that cannot be read or parsed. Rules with a threshold render')
+    parts.append('"measured/limit" (e.g. 6/5); presence rules render "detected".')
+    parts.append("")
+    for rid in sorted(RULES):
+        if rid == "CPLX":
+            parts.append("    (no id) function or class too complex")
+            spec = RULES[rid]
+            for w in textwrap.wrap(spec["description"], width=76):
+                parts.append(f"            {w}")
+            parts.append(f"            scope: {spec['scope']}.")
+            parts.append("")
+            continue
+        parts.append(_format_rule(rid, RULES[rid]).rstrip())
+    return "\n".join(parts)
+
+
+def _build_docs():
+    header = """AVOUCH - Git-aware AST code review for the Python you changed
 ===========================================================
 
 WHAT IT DOES
@@ -110,6 +361,7 @@ not by the command line.
     avouch --not-git     walk CWD; no Git needed
     avouch baseline      snapshot findings to .avouch/baseline.json
     avouch --no-baseline ignore baseline
+    avouch rule SCR002   show one rule (or list all with no arg)
 
 Only one of --changed/--staged/--all-files; --json/--verbose/--quiet combine with any scope;
 --not-git conflicts with --changed/--staged.
@@ -222,106 +474,8 @@ shows `(+N suppressed)`. Idempotent, recomputes from scratch. Malformed
 JSON or wrong version prints `error: invalid baseline:` and exits 2. No file
 means no suppression.
 
-REVIEW RULES
-------------
-Every rule finding is a WARNING. ERROR findings exist only for files
-that cannot be read or parsed. Rules with a threshold render
-"measured/limit" (e.g. 6/5); presence rules render "detected".
-
-    SCR001  async function without await
-            An "async def" whose body contains no "await" runs
-            synchronously at event-loop cost; use a plain function.
-            scope: async functions only.
-
-    SCR002  bare except
-            An "except:" handler catches every exception, including
-            KeyboardInterrupt and SystemExit.
-            scope: functions.
-
-    SCR003  boolean expression too complex
-            One and/or chain with too many operands; nested chains sum,
-            so "a and (b or c)" scores 3.
-            config: max_boolean_conditions (5). scope: funcs + classes.
-
-    SCR004  duplicate branch (functions)
-    SCR006  duplicate branch (classes)
-            if/elif branches with identical bodies - copy-paste or a
-            condition that never varies. The trailing else body is not
-            compared. Two rule IDs implement the same detection:
-            SCR004 (detect_duplicateb) runs on functions, SCR006
-            (empty_except) on functions and classes.
-            scope: SCR004 funcs; SCR006 funcs + classes.
-
-    SCR005  large comprehension
-            A list/set/dict comprehension or generator expression with
-            more AST nodes than the limit.
-            config: max_large_comprehensions (40). scope: functions.
-
-    SCR007  long if/elif chain
-            One if/elif chain longer than the limit.
-            config: max_if_chain (5). scope: funcs + classes.
-
-    SCR008  lambda too complex
-            A lambda whose body has more AST nodes than the limit.
-            config: max_lambda_nodes (10). scope: functions.
-
-    SCR009  too many local variables
-            More distinct assigned names than the limit; measured on
-            plain assignment targets only. Assignments inside nested
-            functions count toward the enclosing function's total.
-            config: max_local_variables (30). scope: functions.
-
-    SCR010  class too large
-            Class line span exceeds max_class_lines (200).
-
-    SCR011  file too large
-            File line count exceeds max_file_lines (1000).
-
-    SCR012  function too long
-            Function line span exceeds max_function_lines (300).
-
-    SCR013  nesting too deep
-            Maximum depth of block nodes (if/for/async for/while/with/
-            async with/try/match) exceeds max_nesting (5).
-            Comprehensions, lambdas, and nested defs add no depth;
-            sibling blocks do not stack - the metric is maximum depth,
-            not block count.
-
-    SCR014  too many parameters
-            Declared positional/keyword parameters exceed
-            max_parameters (5). *args and **kwargs are not counted.
-
-    SCR015  nested function definition
-            A function defined inside another function, recreated
-            inside the outer call. Only plain defs are flagged;
-            a nested async def is not.
-            scope: functions.
-
-    SCR016  too many return statements
-            More "return" statements than max_return_statements (6).
-            Returns inside nested functions count toward the enclosing
-            function's total.
-            scope: functions.
-
-    SCR017  mutable default argument
-            A default parameter value that is a mutable literal ([],
-            {}, {..}) or a mutable constructor call (list(), dict(),
-            set(), bytearray(), defaultdict(), OrderedDict()).
-            Defaults are evaluated once at definition time, so the
-            same object is shared across every call that omits the
-            argument. Use None and construct the object inside the
-            function instead.
-            scope: functions.
-
-    (no id) function or class too complex
-            McCabe cyclomatic complexity: base 1, plus 1 for each
-            if/for/async for/while/try/except handler/match/ternary/
-            assert/with/async with and each and/or chain - a chain
-            counts 1 no matter how many operands it combines, so
-            "a and (b or c)" adds 2; summed over the whole subtree.
-            Exceeds max_complexity (40).
-            scope: funcs + classes.
-
+"""
+    findings = """
 FINDINGS AND OUTPUT
 -------------------
 Human report (colors only when stdout is a TTY):
@@ -411,6 +565,10 @@ EXAMPLES
     # skip a path, e.g. a tests directory
     avouch --ignore-path tests
 
+    # per-rule help
+    avouch rule SCR002
+    avouch rule
+
     # outside a Git repository
     avouch
     error: no Git repository found
@@ -435,8 +593,41 @@ Runtime: Python standard library (ast, tomllib) plus three git
          the current code does not import.
 Docs of record: README.md at the repository root.
 """
+    return header + _rules_section() + findings
+
+
+DOCS = _build_docs()
 
 MENU = "H)elp  G)o  M)ain  Q)uit"
+
+
+def render_rule(rule_id):
+    rid = rule_id.upper()
+    if rid not in RULES:
+        return None
+    spec = RULES[rid]
+    lines = []
+    lines.append(f"{rid}  {spec['name']}")
+    lines.append("-" * len(f"{rid}  {spec['name']}"))
+    lines.append("")
+    lines.append(spec["description"])
+    lines.append("")
+    lines.append(f"Scope: {spec.get('scope','')}")
+    if spec.get("limit_key"):
+        lines.append(f"Config: {spec['limit_key']} (limit {spec['limit_key']}) / toggle {spec['config_key']} (default true)")
+    else:
+        lines.append(f"Config: {spec['config_key']} (default true)")
+    lines.append(f"Severity: {spec.get('severity','WARNING')}")
+    lines.append("")
+    lines.append("Bad:")
+    for l in spec.get("example_bad","").splitlines():
+        lines.append(f"  {l}")
+    lines.append("")
+    lines.append("Good:")
+    for l in spec.get("example_good","").splitlines():
+        lines.append(f"  {l}")
+    lines.append("")
+    return "\n".join(lines)
 
 
 def _hint_box(text):

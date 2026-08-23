@@ -123,7 +123,8 @@ def _main(argv=None):
         action="store_true",
         help="analyze Python files without requiring a Git repository",
     )
-    parser.add_argument("init", nargs="?", const="init", help="init: bootstrap avouch.toml; baseline: snapshot findings to .avouch/baseline.json")
+    parser.add_argument("command", nargs="?", help="init, baseline, or rule")
+    parser.add_argument("rule_id", nargs="?", help="rule ID for 'avouch rule' (e.g. SCR002)")
     parser.add_argument("--dry-run", action="store_true", help="print the avouch.toml that init would write without writing it")
     parser.add_argument("--no-baseline", action="store_true", help="disable baseline suppression")
     args = parser.parse_args(argv)
@@ -132,10 +133,13 @@ def _main(argv=None):
         render_docs()
         return SUCCESS
 
-    if args.init == "init":
+    if args.command == "rule":
+        return _cmd_rule(args)
+
+    if args.command == "init":
         return _cmd_init(args)
 
-    if args.init == "baseline":
+    if args.command == "baseline":
         return _cmd_baseline(args)
 
     try:
@@ -441,4 +445,23 @@ def _cmd_baseline(args):
 
     print(f"baseline written: {count} finding(s) across {len(files)} files")
 
+    return SUCCESS
+
+
+def _cmd_rule(args):
+
+    from avouch.utility.docs import RULES, render_rule
+
+    if args.rule_id is None:
+        for rid in sorted(RULES):
+            print(f"{rid}  {RULES[rid]['name']}")
+        return SUCCESS
+
+    rid = args.rule_id.upper()
+    text = render_rule(rid)
+    if text is None:
+        print(f"error: unknown rule '{args.rule_id}'", file=sys.stderr)
+        print("hint: try 'avouch --docs' or 'avouch rule SCR013'", file=sys.stderr)
+        return ERROR
+    print(text)
     return SUCCESS
