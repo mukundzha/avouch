@@ -63,7 +63,7 @@ def vlog(verbose, message):
         print(f"avouch: {message}", file=sys.stderr)
 
 
-def render_json(function_reports, file_reports, class_reports):
+def _collect_violations(function_reports, file_reports, class_reports):
 
     violations = []
 
@@ -84,6 +84,13 @@ def render_json(function_reports, file_reports, class_reports):
                 }
             )
 
+    return sorted(violations, key=lambda v: (v["file"], v["line"] or 0, v["rule"]))
+
+
+def render_json(function_reports, file_reports, class_reports):
+
+    violations = _collect_violations(function_reports, file_reports, class_reports)
+
     summary = {
         "total": len(violations),
         "errors": sum(1 for v in violations if v["severity"] == "ERROR"),
@@ -97,6 +104,125 @@ def render_json(function_reports, file_reports, class_reports):
             indent=2,
         )
     )
+
+
+def _escape_github(text):
+
+    return text.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+
+
+def _column_for(violation):
+
+    try:
+        lines = Path(violation["file"]).read_text(encoding="utf-8").splitlines()
+        line = violation.get("line")
+        name = violation.get("name") or ""
+        kind = violation.get("kind") or ""
+        if line and 1 <= line <= len(lines) and name and name != "file":
+            text = lines[line - 1]
+            col = -1
+            if kind == "func":
+                for pat, off in ((f"def {name}", 4), (f"async def {name}", 10), (f" {name}(", 1)):
+                    idx = text.find(pat)
+                    if idx != -1:
+                        col = idx + off
+                        break
+            elif kind == "class":
+                pat = f"class {name}"
+                idx = text.find(pat)
+                if idx != -1:
+                    col = idx + 6
+            if col == -1:
+                col = text.find(name)
+            if col != -1:
+                return col + 1
+    except Exception:
+        pass
+    return 1
+
+
+def render_github(function_reports, file_reports, class_reports):
+
+    violations = _collect_violations(function_reports, file_reports, class_reports)
+
+    for v in violations:
+        kind = "error" if v["severity"] == "ERROR" else "warning"
+        col = _column_for(v)
+        title = _escape_github(v["rule"])
+        msg = _escape_github(v["message"])
+        file = v["file"]
+        line = v["line"] or 1
+        print(f"::{kind} file={file},line={line},col={col},title={title}::{msg}")
+
+
+def render_sarif(function_reports, file_reports, class_reports):
+
+    import importlib.metadata
+
+    try:
+        version = importlib.metadata.version("avouch")
+    except Exception:
+        version = "0.3.2"
+
+    violations = _collect_violations(function_reports, file_reports, class_reports)
+
+    try:
+        from avouch.utility.docs import RULES
+    except Exception:
+        RULES = {}
+
+    rules = []
+
+    for rid in sorted(RULES):
+        spec = RULES[rid]
+        rules.append(
+            {
+                "id": rid,
+                "name": spec.get("name", rid),
+                "shortDescription": {"text": spec.get("description", "")},
+                "helpUri": f"https://github.com/mukundzha/avouch#rule-{rid.lower()}",
+            }
+        )
+
+    results = []
+
+    for v in violations:
+        col = _column_for(v)
+        end_col = col + len(v.get("name") or "") if v.get("name") and v["name"] != "file" else col
+        level = "error" if v["severity"] == "ERROR" else "warning"
+        results.append(
+            {
+                "ruleId": v["rule"],
+                "level": level,
+                "message": {"text": v["message"]},
+                "locations": [
+                    {
+                        "physicalLocation": {
+                            "artifactLocation": {"uri": v["file"]},
+                            "region": {
+                                "startLine": v["line"] or 1,
+                                "startColumn": col,
+                                "endLine": v["line"] or 1,
+                                "endColumn": end_col,
+                            },
+                        }
+                    }
+                ],
+            }
+        )
+
+    sarif = {
+        "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json",
+        "version": "2.1.0",
+        "runs": [
+            {
+                "tool": {"driver": {"name": "avouch", "version": version, "rules": rules}},
+                "results": results,
+            }
+        ],
+    }
+
+    print(json.dumps(sarif, indent=2))
 
 
 def render_diff_view(file_paths, function_reports=None, file_reports=None, class_reports=None):

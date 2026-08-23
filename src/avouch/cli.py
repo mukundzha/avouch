@@ -10,7 +10,7 @@ from pathlib import Path
 from avouch.config.loader import DEFAULT_RULES, load_config
 from avouch.config.default import DEFAULT_LIMITS
 from avouch.analyzer import analyze_file
-from avouch.report import generate_report, render_diff_view, render_json, vlog
+from avouch.report import generate_report, render_diff_view, render_github, render_json, render_sarif, vlog
 from avouch.utility.docs import render_docs
 from avouch.git import is_gitrepo, get_changed_files, get_staged_files, get_all_files, get_all_files_on_disk, get_reviewable_files
 from avouch.utility.measure import measure_maxima
@@ -86,6 +86,7 @@ def _main(argv=None):
         help="print the Avouch version and exit",
     )
     parser.add_argument("--json", action="store_true", help="print findings as JSON")
+    parser.add_argument("--format", choices=["github", "sarif"], help="output format for CI: github workflow commands or SARIF 2.1.0")
     parser.add_argument(
         "--ignore-path",
         action="append",
@@ -128,6 +129,16 @@ def _main(argv=None):
     parser.add_argument("--dry-run", action="store_true", help="print the avouch.toml that init would write without writing it")
     parser.add_argument("--no-baseline", action="store_true", help="disable baseline suppression")
     args = parser.parse_args(argv)
+
+    if args.json and args.format:
+        print("error: --json cannot be combined with --format", file=sys.stderr)
+        print("hint: use one output format at a time", file=sys.stderr)
+        return ERROR
+
+    if args.format and args.changed:
+        print("error: --format cannot be combined with --changed", file=sys.stderr)
+        print("hint: --changed is a diff view, not a findings format", file=sys.stderr)
+        return ERROR
 
     if args.docs:
         render_docs()
@@ -295,6 +306,10 @@ def _main(argv=None):
 
     if args.json:
         render_json(functions_reports, file_reports, class_reports)
+    elif args.format == "github":
+        render_github(functions_reports, file_reports, class_reports)
+    elif args.format == "sarif":
+        render_sarif(functions_reports, file_reports, class_reports)
     elif not args.quiet:
         if args.changed:
             try:
