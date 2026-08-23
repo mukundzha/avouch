@@ -1,5 +1,7 @@
 import argparse
+import concurrent.futures
 import importlib.metadata
+import os
 import sys
 import tomllib
 import traceback
@@ -31,6 +33,25 @@ def _nothing_to_review_hint(args, candidate_files):
     if not candidate_files and not args.staged:
         return "nothing changed vs HEAD (CI checkouts are clean); use --all-files for a full review"
     return "change or stage .py files, or use --all-files"
+
+
+def _parallel_target(payload):
+    path, limits, rules = payload
+    return analyze_file(path, limits, rules)
+
+
+def _worker_count(n):
+    if n <= 8:
+        return 1
+    raw = os.environ.get("AVOUCH_WORKERS") or os.environ.get("SCRUT_WORKERS")
+    if raw is not None:
+        try:
+            v = int(raw)
+            return v if v >= 1 else 1
+        except ValueError:
+            return 1
+    c = os.cpu_count() or 1
+    return min(c, 8)
 
 
 def main(argv=None):
@@ -225,17 +246,33 @@ def _main(argv=None):
     functions_reports = []
     class_reports = []
 
-    for file_path in reviewable_files:
-        vlog(args.verbose, f"analyzing {file_path}")
-        functions, files, classes = analyze_file(file_path, limits, rules)
-        vlog(
-            args.verbose,
-            f"analyzed {file_path}: {len(functions)} functions, "
-            f"{len(classes)} classes, {files[0]['lines']} lines", 
-        )
-        functions_reports.extend(functions)
-        file_reports.extend(files)
-        class_reports.extend(classes)
+    workers = _worker_count(len(reviewable_files))
+    if workers == 1:
+        for file_path in reviewable_files:
+            vlog(args.verbose, f"analyzing {file_path}")
+            functions, files, classes = analyze_file(file_path, limits, rules)
+            vlog(
+                args.verbose,
+                f"analyzed {file_path}: {len(functions)} functions, "
+                f"{len(classes)} classes, {files[0]['lines']} lines", 
+            )
+            functions_reports.extend(functions)
+            file_reports.extend(files)
+            class_reports.extend(classes)
+    else:
+        for file_path in reviewable_files:
+            vlog(args.verbose, f"analyzing {file_path}")
+        payloads = [(p, limits, rules) for p in reviewable_files]
+        with concurrent.futures.ProcessPoolExecutor(max_workers=workers) as ex:
+            for file_path, (functions, files, classes) in zip(reviewable_files, ex.map(_parallel_target, payloads)):
+                vlog(
+                    args.verbose,
+                    f"analyzed {file_path}: {len(functions)} functions, "
+                    f"{len(classes)} classes, {files[0]['lines']} lines", 
+                )
+                functions_reports.extend(functions)
+                file_reports.extend(files)
+                class_reports.extend(classes)
 
     suppressed = 0
     if not args.no_baseline:
