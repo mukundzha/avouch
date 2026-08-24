@@ -85,6 +85,29 @@ def test_main_fix_removes_mutable_default_finding(tmp_path, monkeypatch, capsys)
     assert "items=None" in path.read_text()
 
 
+def test_main_selects_and_ignores_rules(tmp_path, monkeypatch, capsys):
+
+    path = tmp_path / "bad.py"
+    path.write_text(
+        "def f(a, b, c, d, e, f, items=[]):\n"
+        "    return items\n"
+    )
+    monkeypatch.chdir(tmp_path)
+
+    assert main(["--not-git", "--select", "SCR014,SCR017", "--ignore", "SCR014"]) == VIOLATIONS_FOUND
+    output = capsys.readouterr().out
+    assert "Mutable default argument detected" in output
+    assert "Too many parameters" not in output
+
+
+def test_main_rejects_unknown_rule_filter(tmp_path, monkeypatch, capsys):
+
+    monkeypatch.chdir(tmp_path)
+
+    assert main(["--not-git", "--select", "SCR999"]) == ERROR
+    assert "unknown rule 'SCR999'" in capsys.readouterr().err
+
+
 def test_main_with_real_git_repo(tmp_path, monkeypatch, capsys):
 
     def git(*args):

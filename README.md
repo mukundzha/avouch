@@ -149,6 +149,10 @@ avouch --all-files --format sarif > results.sarif
 
 **`--ignore-path`** — Repeatable, component-wise (`tests` skips `tests/` not `tests.py`). Combined with `ignore_paths` in `avouch.toml`.
 
+**`--select RULES`** — Review only the comma-separated rule IDs. Repeatable; `--ignore RULES` is applied afterward.
+
+**`--ignore RULES`** — Skip the comma-separated rule IDs for this run without changing `avouch.toml`.
+
 **`--docs`** — Full docs (`avouch --docs`) — workflow, 18 rules, limits, examples. Works outside repo.
 
 ## Init & Baseline

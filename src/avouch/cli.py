@@ -13,6 +13,7 @@ from avouch.config.default import DEFAULT_LIMITS
 from avouch.analyzer import analyze_file
 from avouch.report import generate_report, render_diff_view, render_github, render_json, render_sarif, vlog
 from avouch.utility.docs import render_docs
+from avouch.utility.docs import RULES as DOC_RULES
 from avouch.git import is_gitrepo, get_changed_files, get_staged_files, get_all_files, get_all_files_on_disk, get_reviewable_files
 from avouch.utility.measure import measure_maxima
 from avouch.baseline import load_baseline, filter_reports, write_baseline
@@ -56,6 +57,21 @@ def _worker_count(n):
     return min(c, 8)
 
 
+def _rule_filter_values(values):
+    rule_keys = {}
+    for rule_id, spec in DOC_RULES.items():
+        rule_keys[rule_id] = spec["config_key"]
+
+    result = []
+    for value in values or []:
+        result.extend(part.strip().upper() for part in value.split(",") if part.strip())
+
+    unknown = [rule_id for rule_id in result if rule_id not in rule_keys]
+    if unknown:
+        raise ValueError(f"unknown rule '{unknown[0]}'")
+    return {rule_keys[rule_id] for rule_id in result}
+
+
 def main(argv=None):
 
     verbose = "--verbose" in (argv if argv is not None else sys.argv[1:])
@@ -94,6 +110,18 @@ def _main(argv=None):
         action="append",
         metavar="PATH",
         help="exclude a repository-relative file or directory from the review; can be repeated",
+    )
+    parser.add_argument(
+        "--select",
+        action="append",
+        metavar="RULES",
+        help="review only the comma-separated rule IDs; can be repeated",
+    )
+    parser.add_argument(
+        "--ignore",
+        action="append",
+        metavar="RULES",
+        help="skip the comma-separated rule IDs; can be repeated",
     )
     parser.add_argument(
         "--verbose",
@@ -137,6 +165,14 @@ def _main(argv=None):
     parser.add_argument("--no-baseline", action="store_true", help="disable baseline suppression")
     args = parser.parse_args(argv)
 
+    try:
+        selected_rules = _rule_filter_values(args.select)
+        ignored_rules = _rule_filter_values(args.ignore)
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        print("hint: use IDs such as SCR002,SCR017; run 'avouch rule' to list rules", file=sys.stderr)
+        return ERROR
+
     if args.json and args.format:
         print("error: --json cannot be combined with --format", file=sys.stderr)
         print("hint: use one output format at a time", file=sys.stderr)
@@ -168,6 +204,11 @@ def _main(argv=None):
         return ERROR
 
     rules = config.get("rules", DEFAULT_RULES)
+    if args.select:
+        rules = {key: enabled and key in selected_rules for key, enabled in rules.items()}
+    for key in ignored_rules:
+        if key in rules:
+            rules[key] = False
     limits = config.get("limits", DEFAULT_LIMITS)
     ignore_paths = config.get("ignore_paths", []) + (args.ignore_path or [])
     ignore_paths = list(dict.fromkeys(ignore_paths))
