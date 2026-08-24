@@ -16,7 +16,7 @@ from avouch.utility.docs import render_docs
 from avouch.git import is_gitrepo, get_changed_files, get_staged_files, get_all_files, get_all_files_on_disk, get_reviewable_files
 from avouch.utility.measure import measure_maxima
 from avouch.baseline import load_baseline, filter_reports, write_baseline
-from avouch.fix import fix_bare_except
+from avouch.fix import fix_bare_except, fix_mutable_default_args
 
 SUCCESS = 0
 VIOLATIONS_FOUND = 1
@@ -213,6 +213,7 @@ def _main(argv=None):
         try:
             for file_path in reviewable_files:
                 fixed += fix_bare_except(file_path)
+                fixed += fix_mutable_default_args(file_path)
         except (OSError, UnicodeDecodeError, tokenize.TokenError) as exc:
             print(f"error: could not apply fixes: {exc}", file=sys.stderr)
             return ERROR
