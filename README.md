@@ -145,6 +145,8 @@ avouch --all-files --format sarif > results.sarif
 
 **`--verbose`** — Step-by-step to stderr: `config: <resolved-path>`, `review set:`, `analyzing`, `suppressed`, `findings:`.
 
+**`--fix`** — Apply safe fixes before reviewing. Currently replaces bare `except:` clauses with `except Exception:` and preserves the surrounding source. Combine with any review scope, including `--not-git`.
+
 **`--ignore-path`** — Repeatable, component-wise (`tests` skips `tests/` not `tests.py`). Combined with `ignore_paths` in `avouch.toml`.
 
 **`--docs`** — Full docs (`avouch --docs`) — workflow, 18 rules, limits, examples. Works outside repo.

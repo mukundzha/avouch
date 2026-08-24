@@ -3,6 +3,7 @@ import concurrent.futures
 import importlib.metadata
 import os
 import sys
+import tokenize
 import tomllib
 import traceback
 from pathlib import Path
@@ -15,6 +16,7 @@ from avouch.utility.docs import render_docs
 from avouch.git import is_gitrepo, get_changed_files, get_staged_files, get_all_files, get_all_files_on_disk, get_reviewable_files
 from avouch.utility.measure import measure_maxima
 from avouch.baseline import load_baseline, filter_reports, write_baseline
+from avouch.fix import fix_bare_except
 
 SUCCESS = 0
 VIOLATIONS_FOUND = 1
@@ -102,6 +104,11 @@ def _main(argv=None):
         "--quiet",
         action="store_true",
         help="suppress the normal report; errors and exit codes are unchanged",
+    )
+    parser.add_argument(
+        "--fix",
+        action="store_true",
+        help="replace safe bare except clauses with except Exception before reviewing",
     )
     selection = parser.add_mutually_exclusive_group()
     selection.add_argument(
@@ -200,6 +207,17 @@ def _main(argv=None):
         print("error: nothing to review", file=sys.stderr)
         print(f"hint: {_nothing_to_review_hint(args, candidate_files)}", file=sys.stderr)
         return ERROR
+
+    if args.fix:
+        fixed = 0
+        try:
+            for file_path in reviewable_files:
+                fixed += fix_bare_except(file_path)
+        except (OSError, UnicodeDecodeError, tokenize.TokenError) as exc:
+            print(f"error: could not apply fixes: {exc}", file=sys.stderr)
+            return ERROR
+        if fixed:
+            vlog(args.verbose, f"fixed {fixed} bare except clause(s)")
 
     cfg_label = config.get("_config_path") or "defaults (no avouch.toml)"
     vlog(

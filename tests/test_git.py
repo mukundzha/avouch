@@ -14,6 +14,42 @@ from avouch.config.loader import load_config, merge_limits, DEFAULT_RULES, merge
 from avouch.rules.complexity import calculate_complexity
 from avouch.rules.boolean_complexity import analyze, count_boolean_conditions
 from avouch.utility.is_ignored import is_ignored
+from avouch.fix import fix_bare_except
+
+
+def test_fix_bare_except_preserves_other_source(tmp_path):
+
+    path = tmp_path / "bad.py"
+    path.write_text(
+        "text = 'except:'\n"
+        "def f():\n"
+        "    try:\n"
+        "        pass\n"
+        "    except:\n"
+        "        pass\n"
+    )
+
+    assert fix_bare_except(path) == 1
+    assert path.read_text() == (
+        "text = 'except:'\n"
+        "def f():\n"
+        "    try:\n"
+        "        pass\n"
+        "    except Exception:\n"
+        "        pass\n"
+    )
+    assert fix_bare_except(path) == 0
+
+
+def test_main_fix_removes_bare_except(tmp_path, monkeypatch, capsys):
+
+    path = tmp_path / "bad.py"
+    path.write_text("def f():\n    try:\n        pass\n    except:\n        pass\n")
+    monkeypatch.chdir(tmp_path)
+
+    assert main(["--not-git", "--fix"]) == SUCCESS
+    assert "All clean." in capsys.readouterr().out
+    assert "except Exception:" in path.read_text()
 
 def test_main_with_real_git_repo(tmp_path, monkeypatch, capsys):
 
