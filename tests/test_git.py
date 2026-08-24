@@ -6,7 +6,7 @@ from unittest.mock import Mock, patch
 import pytest
 
 from avouch.analyzer import analyze_file, get_depth, read_file
-from avouch.git import get_changed_files, get_staged_files, get_reviewable_files, is_gitrepo
+from avouch.git import get_changed_files, get_staged_files, get_reviewable_files, get_changed_line_ranges, is_gitrepo
 from avouch.report import generate_report
 from avouch.cli import main, SUCCESS, VIOLATIONS_FOUND, ERROR
 from avouch.config.default import DEFAULT_LIMITS
@@ -106,6 +106,43 @@ def test_main_rejects_unknown_rule_filter(tmp_path, monkeypatch, capsys):
 
     assert main(["--not-git", "--select", "SCR999"]) == ERROR
     assert "unknown rule 'SCR999'" in capsys.readouterr().err
+
+
+def test_main_changed_lines_exclude_untouched_function(tmp_path, monkeypatch, capsys):
+
+    def git(*args):
+        subprocess.run(["git", *args], cwd=tmp_path, check=True, capture_output=True)
+
+    git("init", "-q")
+    git("config", "user.email", "test@example.com")
+    git("config", "user.name", "Test")
+    (tmp_path / "app.py").write_text(
+        "def untouched():\n"
+        "    if True:\n"
+        "        pass\n"
+        "\n"
+        "def changed():\n"
+        "    pass\n"
+    )
+    (tmp_path / "avouch.toml").write_text("[limits]\nmax_complexity = 1\n")
+    git("add", "-A")
+    git("-c", "commit.gpgsign=false", "commit", "-q", "-m", "initial")
+
+    (tmp_path / "app.py").write_text(
+        "def untouched():\n"
+        "    if True:\n"
+        "        pass\n"
+        "\n"
+        "def changed():\n"
+        "    if True:\n"
+        "        pass\n"
+    )
+    monkeypatch.chdir(tmp_path)
+
+    assert main([]) == VIOLATIONS_FOUND
+    output = capsys.readouterr().out
+    assert "changed" in output
+    assert "untouched" not in output
 
 
 def test_main_with_real_git_repo(tmp_path, monkeypatch, capsys):

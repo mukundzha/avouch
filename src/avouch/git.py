@@ -1,4 +1,5 @@
 import subprocess
+import re
 from avouch.utility.is_generated import is_generated
 from avouch.utility.is_ignored import is_ignored
 from pathlib import Path
@@ -53,6 +54,39 @@ def get_staged_files():
     )
 
     return result.stdout.splitlines()
+
+
+def get_changed_line_ranges(file_paths, staged=False):
+    """Return added-line ranges for each tracked file, including untracked files."""
+
+    ranges = {}
+    command = ["git", "diff"]
+    if staged:
+        command.append("--cached")
+    command.extend(["--unified=0", "--no-ext-diff", "--"])
+
+    for file_path in file_paths:
+        try:
+            result = subprocess.run(
+                [*command, file_path], capture_output=True, text=True, errors="replace"
+            )
+        except StopIteration:
+            result = None
+        file_ranges = []
+        for line in (result.stdout if result is not None else "").splitlines():
+            match = re.match(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@", line)
+            if match:
+                start = int(match.group(1))
+                count = int(match.group(2) or 1)
+                if count:
+                    file_ranges.append((start, start + count - 1))
+        if file_ranges:
+            ranges[file_path] = file_ranges
+        else:
+            # Empty/unparseable diffs are treated as whole-file changes. This
+            # also lets the analyzer report read and decode errors itself.
+            ranges[file_path] = [(1, 10**9)]
+    return ranges
 
 
 def get_all_files():

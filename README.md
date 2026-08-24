@@ -78,6 +78,8 @@ avouch --version     # avouch 0.3.3
 
 **Default** — Changed vs `HEAD` + untracked. Best before `git push`.
 
+Findings are limited to functions and classes whose source span overlaps an added or changed line. File-level findings still apply to the changed file. `--all-files` and `--not-git` review complete files.
+
 **`--changed`** — Diff view with `+`/`-` hunks and findings pinned inline. Local PR sketch.
 ```bash
 avouch --changed

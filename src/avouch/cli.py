@@ -14,7 +14,7 @@ from avouch.analyzer import analyze_file
 from avouch.report import generate_report, render_diff_view, render_github, render_json, render_sarif, vlog
 from avouch.utility.docs import render_docs
 from avouch.utility.docs import RULES as DOC_RULES
-from avouch.git import is_gitrepo, get_changed_files, get_staged_files, get_all_files, get_all_files_on_disk, get_reviewable_files
+from avouch.git import is_gitrepo, get_changed_files, get_staged_files, get_all_files, get_all_files_on_disk, get_reviewable_files, get_changed_line_ranges
 from avouch.utility.measure import measure_maxima
 from avouch.baseline import load_baseline, filter_reports, write_baseline
 from avouch.fix import fix_bare_except, fix_mutable_default_args
@@ -70,6 +70,24 @@ def _rule_filter_values(values):
     if unknown:
         raise ValueError(f"unknown rule '{unknown[0]}'")
     return {rule_keys[rule_id] for rule_id in result}
+
+
+def _filter_changed_reports(functions, files, classes, line_ranges):
+    def keep(report):
+        if report["kind"] == "file":
+            return True
+        start = report.get("line")
+        end = start + report.get("lines", 1) - 1 if start else start
+        return any(
+            start <= changed_end and end >= changed_start
+            for changed_start, changed_end in line_ranges.get(report["file"], [])
+        )
+
+    return (
+        [report for report in functions if keep(report)],
+        files,
+        [report for report in classes if keep(report)],
+    )
 
 
 def main(argv=None):
@@ -261,6 +279,11 @@ def _main(argv=None):
         if fixed:
             vlog(args.verbose, f"fixed {fixed} bare except clause(s)")
 
+    if not args.not_git and not args.all_files and not args.changed:
+        ranges = get_changed_line_ranges(reviewable_files, staged=args.staged)
+    else:
+        ranges = None
+
     cfg_label = config.get("_config_path") or "defaults (no avouch.toml)"
     vlog(
         args.verbose,
@@ -335,6 +358,7 @@ def _main(argv=None):
             functions_reports.extend(functions)
             file_reports.extend(files)
             class_reports.extend(classes)
+
     else:
         for file_path in reviewable_files:
             vlog(args.verbose, f"analyzing {file_path}")
@@ -349,6 +373,11 @@ def _main(argv=None):
                 functions_reports.extend(functions)
                 file_reports.extend(files)
                 class_reports.extend(classes)
+
+    if ranges is not None:
+        functions_reports, file_reports, class_reports = _filter_changed_reports(
+            functions_reports, file_reports, class_reports, ranges
+        )
 
     suppressed = 0
     if not args.no_baseline:
