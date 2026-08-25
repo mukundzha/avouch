@@ -2,11 +2,16 @@ import argparse
 import concurrent.futures
 import importlib.metadata
 import os
+import shutil
 import sys
 import tokenize
 import tomllib
 import traceback
 from pathlib import Path
+
+from rich.console import Console
+from rich.pager import Pager
+from rich.syntax import Syntax
 
 from avouch.config.loader import DEFAULT_RULES, load_config
 from avouch.config.default import DEFAULT_LIMITS
@@ -14,7 +19,16 @@ from avouch.analyzer import analyze_file
 from avouch.report import generate_report, render_diff_view, render_github, render_json, render_sarif, vlog
 from avouch.utility.docs import render_docs
 from avouch.utility.docs import RULES as DOC_RULES
-from avouch.git import is_gitrepo, get_changed_files, get_staged_files, get_all_files, get_all_files_on_disk, get_reviewable_files, get_changed_line_ranges
+from avouch.git import (
+    DISK_SKIP_DIRS,
+    get_all_files,
+    get_all_files_on_disk,
+    get_changed_files,
+    get_changed_line_ranges,
+    get_reviewable_files,
+    get_staged_files,
+    is_gitrepo,
+)
 from avouch.utility.measure import measure_maxima
 from avouch.baseline import load_baseline, filter_reports, write_baseline
 from avouch.fix import fix_bare_except, fix_mutable_default_args
@@ -55,6 +69,90 @@ def _worker_count(n):
             return 1
     c = os.cpu_count() or 1
     return min(c, 8)
+
+
+class _DisplayPager(Pager):
+    def show(self, content):
+        if not (sys.stdin.isatty() and sys.stdout.isatty() and os.name == "posix"):
+            sys.stdout.write(content)
+            return
+
+        import termios
+        import tty
+
+        lines = content.splitlines()
+        page_size = max(shutil.get_terminal_size((80, 24)).lines - 1, 1)
+        offset = 0
+        old_settings = termios.tcgetattr(sys.stdin)
+
+        try:
+            tty.setcbreak(sys.stdin.fileno())
+            while True:
+                sys.stdout.write("\x1b[2J\x1b[H")
+                sys.stdout.write("\n".join(lines[offset : offset + page_size]))
+                sys.stdout.write(
+                    f"\n\n-- lines {offset + 1}-{min(offset + page_size, len(lines))}"
+                    " (q quit, space next, b previous) --"
+                )
+                sys.stdout.flush()
+                key = sys.stdin.read(1)
+
+                if key == "q" or key == "\x03":
+                    break
+                if key in (" ", "f", "j", "\r", "\n"):
+                    offset = min(max(len(lines) - page_size, 0), offset + page_size)
+                elif key in ("b", "k"):
+                    offset = max(0, offset - page_size)
+                elif key == "g":
+                    offset = 0
+                elif key == "G":
+                    offset = max(len(lines) - page_size, 0)
+        finally:
+            termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old_settings)
+            sys.stdout.write("\x1b[2J\x1b[H")
+            sys.stdout.flush()
+
+
+def _display_file(file_path):
+    path = Path(file_path)
+
+    if not path.is_file() and len(path.parts) == 1:
+        matches = sorted(
+            candidate
+            for candidate in Path.cwd().rglob(path.name)
+            if candidate.is_file()
+            and not any(part in DISK_SKIP_DIRS for part in candidate.parts)
+        )
+        if len(matches) == 1:
+            path = matches[0]
+        elif len(matches) > 1:
+            names = ", ".join(str(match.relative_to(Path.cwd())) for match in matches)
+            print(
+                f"error: multiple files named '{file_path}' found: {names}",
+                file=sys.stderr,
+            )
+            print("hint: use a relative path to select one", file=sys.stderr)
+            return ERROR
+
+    try:
+        source = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        print(f"error: could not display '{file_path}': {exc}", file=sys.stderr)
+        return ERROR
+
+    lexer = Syntax.guess_lexer(str(path), source)
+    syntax = Syntax(
+        source,
+        lexer,
+        line_numbers=True,
+        word_wrap=False,
+        indent_guides=True,
+    )
+
+    console = Console()
+    with console.pager(pager=_DisplayPager(), styles=True):
+        console.print(syntax)
+    return SUCCESS
 
 
 def _rule_filter_values(values):
@@ -177,6 +275,11 @@ def _main(argv=None):
         action="store_true",
         help="print each changed file path and exit",
     )
+    selection.add_argument(
+        "--display",
+        metavar="FILE",
+        help="display a file with syntax highlighting and paging",
+    )
     parser.add_argument(
         "--not-git",
         action="store_true",
@@ -218,6 +321,9 @@ def _main(argv=None):
 
     if args.command == "baseline":
         return _cmd_baseline(args)
+
+    if args.display:
+        return _display_file(args.display)
 
     try:
         config = load_config()

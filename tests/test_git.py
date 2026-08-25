@@ -169,6 +169,48 @@ def test_main_list_changed_lists_git_changes(tmp_path, monkeypatch, capsys):
     assert capsys.readouterr().out.strip().splitlines() == ["a.py", "b.py"]
 
 
+def test_main_display_shows_file_with_rich_pager(tmp_path, monkeypatch):
+
+    path = tmp_path / "src" / "example.py"
+    path.parent.mkdir()
+    path.write_text("def hello():\n    return 'world'\n")
+    captured = {}
+
+    class FakePager:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+    class FakeConsole:
+        def pager(self, **kwargs):
+            captured["pager"] = kwargs
+            return FakePager()
+
+        def print(self, value):
+            captured["syntax"] = value
+
+    monkeypatch.setattr("avouch.cli.Console", FakeConsole)
+    monkeypatch.setattr("avouch.cli.is_gitrepo", lambda: False)
+
+    monkeypatch.chdir(tmp_path)
+
+    assert main(["--display", "example.py"]) == SUCCESS
+    assert captured["pager"]["styles"] is True
+    assert captured["pager"]["pager"].__class__.__name__ == "_DisplayPager"
+    assert captured["syntax"].code == path.read_text()
+    assert captured["syntax"].line_numbers is True
+
+
+def test_main_display_reports_missing_file(tmp_path, monkeypatch, capsys):
+
+    monkeypatch.chdir(tmp_path)
+
+    assert main(["--display", "missing.py"]) == ERROR
+    assert "error: could not display 'missing.py'" in capsys.readouterr().err
+
+
 def test_main_with_real_git_repo(tmp_path, monkeypatch, capsys):
 
     def git(*args):

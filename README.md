@@ -87,6 +87,11 @@ avouch --list-changed
 # tests/test_review.py
 ```
 
+**`--display FILE`** — Display a file with syntax highlighting, line numbers, and an interactive pager. Press `q` to quit.
+```bash
+avouch --display src/avouch/cli.py
+```
+
 **`--changed`** — Diff view with `+`/`-` hunks and findings pinned inline. Local PR sketch.
 ```bash
 avouch --changed
