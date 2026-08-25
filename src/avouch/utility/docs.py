@@ -190,6 +190,16 @@ RULES = {
         "scope": "functions",
         "severity": "WARNING",
     },
+    "SCR019": {
+        "name": "subprocess shell execution",
+        "description": "A subprocess call with shell=True executes through a shell and can allow command injection when input is influenced by users.",
+        "why": "Shell execution expands command-injection risk.",
+        "example_bad": "subprocess.run(command, shell=True)",
+        "example_good": "subprocess.run([program, argument])",
+        "config_key": "shell_true",
+        "scope": "functions",
+        "severity": "ERROR",
+    },
     "CPLX": {
         "name": "function or class too complex",
         "description": "McCabe cyclomatic complexity: base 1, plus 1 for each if/for/async for/while/try/except handler/match/ternary/assert/with/async with and each and/or chain - a chain counts 1 no matter how many operands it combines, so \"a and (b or c)\" adds 2; summed over whole subtree. Exceeds max_complexity (40).",

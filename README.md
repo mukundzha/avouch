@@ -145,7 +145,7 @@ avouch --all-files --format github
 ```
 Use in Actions to annotate PR diff.
 
-**`--format sarif`** — SARIF 2.1.0 for code-scanning. Includes `tool.driver.rules` (18 rules) and `physicalLocation` spans.
+**`--format sarif`** — SARIF 2.1.0 for code-scanning. Includes `tool.driver.rules` (19 rules) and `physicalLocation` spans.
 ```bash
 avouch --all-files --format sarif > results.sarif
 # upload with github/codeql-action/upload-sarif
@@ -167,7 +167,7 @@ avouch --all-files --format sarif > results.sarif
 
 **`--ignore RULES`** — Skip the comma-separated rule IDs for this run without changing `avouch.toml`.
 
-**`--docs`** — Full docs (`avouch --docs`) — workflow, 18 rules, limits, examples. Works outside repo.
+**`--docs`** — Full docs (`avouch --docs`) — workflow, 19 rules, limits, examples. Works outside repo.
 
 ## Init & Baseline
 
@@ -212,7 +212,7 @@ avouch rule SCR002       # show one: name, description, scope, config, Bad/Good,
 avouch rule SCR014       # too many parameters
 ```
 
-Bare `avouch rule` lists 18 IDs; unknown → `error: unknown rule 'FOO'` exit 2; works outside repo.
+Bare `avouch rule` lists 19 IDs; unknown → `error: unknown rule 'FOO'` exit 2; works outside repo.
 
 ## Configuration
 

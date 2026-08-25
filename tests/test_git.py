@@ -15,6 +15,24 @@ from avouch.rules.complexity import calculate_complexity
 from avouch.rules.boolean_complexity import analyze, count_boolean_conditions
 from avouch.utility.is_ignored import is_ignored
 from avouch.fix import fix_bare_except, fix_mutable_default_args
+from avouch.rules.shell_true import analyze as analyze_shell_true
+
+
+def test_shell_true_rule_flags_supported_subprocess_calls():
+
+    node = ast.parse("def run(command):\n    subprocess.run(command, shell=True)\n").body[0]
+
+    issues = analyze_shell_true(node, DEFAULT_LIMITS)
+
+    assert issues[0]["rule"] == "SCR019"
+    assert issues[0]["severity"] == "ERROR"
+
+
+def test_shell_true_rule_ignores_safe_calls():
+
+    node = ast.parse("def run(command):\n    subprocess.run([command])\n").body[0]
+
+    assert analyze_shell_true(node, DEFAULT_LIMITS) == []
 
 
 def test_fix_bare_except_preserves_other_source(tmp_path):

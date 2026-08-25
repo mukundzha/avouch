@@ -24,6 +24,7 @@ DEFAULT_RULES = {
     "bare_except": True,
     "async_without_await": True,
     "mutable_default_args": True,
+    "shell_true": True,
 }
 
 DEFAULT_IGNORE_PATHS = []

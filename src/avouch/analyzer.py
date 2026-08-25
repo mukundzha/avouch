@@ -16,6 +16,7 @@ from avouch.rules.max_nesting import analyze as analyze_max_nesting, get_depth, 
 from avouch.rules.max_class_lines import analyze as analyze_max_class_lines
 from avouch.rules.max_file_lines import analyze as analyze_max_file_lines
 from avouch.rules.mutable_default_args import analyze as analyze_mutable_default_args
+from avouch.rules.shell_true import analyze as analyze_shell_true
 
 import ast
 
@@ -106,6 +107,8 @@ def _analyze_func(node, file_path, limits, rules):
         issues.extend(analyze_bare_except(node, limits))
     if rules["mutable_default_args"]:
         issues.extend(analyze_mutable_default_args(node, limits))
+    if rules["shell_true"]:
+        issues.extend(analyze_shell_true(node, limits))
 
     report = {
         "name": node.name,
