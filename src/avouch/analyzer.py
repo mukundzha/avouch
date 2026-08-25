@@ -17,6 +17,7 @@ from avouch.rules.max_class_lines import analyze as analyze_max_class_lines
 from avouch.rules.max_file_lines import analyze as analyze_max_file_lines
 from avouch.rules.mutable_default_args import analyze as analyze_mutable_default_args
 from avouch.rules.shell_true import analyze as analyze_shell_true
+from avouch.rules.dynamic_code import analyze as analyze_dynamic_code
 
 import ast
 
@@ -109,6 +110,8 @@ def _analyze_func(node, file_path, limits, rules):
         issues.extend(analyze_mutable_default_args(node, limits))
     if rules["shell_true"]:
         issues.extend(analyze_shell_true(node, limits))
+    if rules["dynamic_code"]:
+        issues.extend(analyze_dynamic_code(node, limits))
 
     report = {
         "name": node.name,

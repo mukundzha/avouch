@@ -25,6 +25,7 @@ DEFAULT_RULES = {
     "async_without_await": True,
     "mutable_default_args": True,
     "shell_true": True,
+    "dynamic_code": True,
 }
 
 DEFAULT_IGNORE_PATHS = []

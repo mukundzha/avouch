@@ -200,6 +200,16 @@ RULES = {
         "scope": "functions",
         "severity": "ERROR",
     },
+    "SCR020": {
+        "name": "dynamic code execution",
+        "description": "A call to eval() or exec() executes dynamically supplied Python code and can run untrusted input.",
+        "why": "Untrusted code execution can compromise the process.",
+        "example_bad": "eval(user_input)",
+        "example_good": "operations[user_input]()",
+        "config_key": "dynamic_code",
+        "scope": "functions",
+        "severity": "ERROR",
+    },
     "CPLX": {
         "name": "function or class too complex",
         "description": "McCabe cyclomatic complexity: base 1, plus 1 for each if/for/async for/while/try/except handler/match/ternary/assert/with/async with and each and/or chain - a chain counts 1 no matter how many operands it combines, so \"a and (b or c)\" adds 2; summed over whole subtree. Exceeds max_complexity (40).",
