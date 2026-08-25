@@ -80,6 +80,13 @@ avouch --version     # avouch 0.3.3
 
 Findings are limited to functions and classes whose source span overlaps an added or changed line. File-level findings still apply to the changed file. `--all-files` and `--not-git` review complete files.
 
+**`--list-changed`** — Print each changed file path, one per line, and exit. Useful for scripts and tooling.
+```bash
+avouch --list-changed
+# src/app.py
+# tests/test_review.py
+```
+
 **`--changed`** — Diff view with `+`/`-` hunks and findings pinned inline. Local PR sketch.
 ```bash
 avouch --changed

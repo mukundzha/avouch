@@ -145,6 +145,30 @@ def test_main_changed_lines_exclude_untouched_function(tmp_path, monkeypatch, ca
     assert "untouched" not in output
 
 
+def test_main_list_changed_lists_git_changes(tmp_path, monkeypatch, capsys):
+
+    def git(*args):
+        subprocess.run(["git", *args], cwd=tmp_path, check=True, capture_output=True)
+
+    git("init", "-q")
+    git("config", "user.email", "test@example.com")
+    git("config", "user.name", "Test")
+
+    (tmp_path / "a.py").write_text("def a():\n    pass\n")
+    git("add", "-A")
+    git("-c", "commit.gpgsign=false", "commit", "-q", "-m", "initial")
+
+    (tmp_path / "a.py").write_text("def a():\n    return 1\n")
+    (tmp_path / "b.py").write_text("def b():\n    pass\n")
+    (tmp_path / "notes.txt").write_text("x\n")
+    git("add", "-A")
+
+    monkeypatch.chdir(tmp_path)
+
+    assert main(["--list-changed"]) == SUCCESS
+    assert capsys.readouterr().out.strip().splitlines() == ["a.py", "b.py"]
+
+
 def test_main_with_real_git_repo(tmp_path, monkeypatch, capsys):
 
     def git(*args):

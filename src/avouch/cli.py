@@ -172,6 +172,11 @@ def _main(argv=None):
         action="store_true",
         help="review every eligible Python file in the repository",
     )
+    selection.add_argument(
+        "--list-changed",
+        action="store_true",
+        help="print each changed file path and exit",
+    )
     parser.add_argument(
         "--not-git",
         action="store_true",
@@ -239,16 +244,46 @@ def _main(argv=None):
         )
         return ERROR
 
-    if args.not_git and (args.changed or args.staged):
-        print(
-            "error: --not-git cannot be combined with --changed or --staged",
-            file=sys.stderr,
-        )
-        print(
-            "hint: --changed and --staged compare against Git history, which --not-git bypasses",
-            file=sys.stderr,
-        )
+    if args.not_git and (args.changed or args.staged or args.list_changed):
+        if args.list_changed:
+            print(
+                "error: --not-git cannot be combined with --changed, --staged, or --list-changed",
+                file=sys.stderr,
+            )
+            print(
+                "hint: --changed, --staged, and --list-changed compare against Git history, which --not-git bypasses",
+                file=sys.stderr,
+            )
+        else:
+            print(
+                "error: --not-git cannot be combined with --changed or --staged",
+                file=sys.stderr,
+            )
+            print(
+                "hint: --changed and --staged compare against Git history, which --not-git bypasses",
+                file=sys.stderr,
+            )
         return ERROR
+
+    if args.list_changed:
+        if not is_gitrepo():
+            print("error: no Git repository found", file=sys.stderr)
+            print(
+                "hint: run Avouch from inside a Git repository to list changed files",
+                file=sys.stderr,
+            )
+            return ERROR
+
+        candidate_files = get_changed_files()
+        reviewable_files = get_reviewable_files(candidate_files, ignore_paths)
+
+        if not reviewable_files:
+            print("No changed files.")
+            return SUCCESS
+
+        for file_path in reviewable_files:
+            print(file_path)
+        return SUCCESS
 
     if args.not_git:
         candidate_files = get_all_files_on_disk()
