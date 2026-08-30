@@ -789,7 +789,7 @@ def test_main_version_prints_version(capsys):
         main(["--version"])
 
     assert exc.value.code == 0
-    assert "avouch 0.3.3" in capsys.readouterr().out
+    assert "avouch 0.3.4" in capsys.readouterr().out
 
 
 def _main_all_files(tmp_path, monkeypatch, stdout):

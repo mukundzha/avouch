@@ -375,6 +375,7 @@ not by the command line.
     avouch --version     version
     avouch --verbose     details on stderr
     avouch --quiet       no report; exit code only
+    avouch --watch       watch and re-run on change (polling, Ctrl+C)
     avouch --changed     diff view of changed files
     avouch --staged      staged only
     avouch --all-files   every eligible file
@@ -383,8 +384,8 @@ not by the command line.
     avouch --no-baseline ignore baseline
     avouch rule SCR002   show one rule (or list all with no arg)
 
-Only one of --changed/--staged/--all-files; --json/--verbose/--quiet combine with any scope;
---not-git conflicts with --changed/--staged.
+Only one of --changed/--staged/--all-files; --json/--verbose/--quiet/--watch combine with any scope;
+--not-git conflicts with --changed/--staged; --watch conflicts with --json/--format/--list-changed/--display.
 
 CONFIGURATION
 -------------
@@ -498,9 +499,11 @@ means no suppression.
     findings = """
 FINDINGS AND OUTPUT
 -------------------
-Human report (colors only when stdout is a TTY):
+Human report (colors only when stdout is a TTY, premium blocks on TTY, plain on pipe):
 
-    AVOUCH · 2 FILES · 4 WARN
+    ┌─ avouch 0.3.4 ───────────────────────────────────────────────────────────────┐
+    │                        2 files  ·  4 warn  ·  0 err                        │
+    └──────────────────────────────────────────────────────────────────────────────┘
 
     src/app.py:1: SCR002: Bare except detected. Catch a specific
     exception instead, e.g. except ValueError:.
