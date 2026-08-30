@@ -18,6 +18,14 @@ _CYAN = 36
 _BOLD = 1
 _DIM = 2
 
+_ACCENT = "#c48a3f"
+_ACCENT_DIM = "#8a7a5a"
+_MUTED = "#8a8680"
+_SUCCESS = "#7a9e7e"
+_ERROR = "#c45c4a"
+_SURFACE = "#1a1918"
+_BORDER = "#55504a"
+
 # How many lines the passing grid may occupy before collapsing
 _MAX_PASSING_LINES = 4
 
@@ -505,6 +513,130 @@ def _context_labels(file_path):
     return labels
 
 
+def _render_premium(issues_by_file, file_reports, error_count, warning_count, suppressed, total_files):
+    from rich.console import Console
+    from rich.panel import Panel
+    from rich.table import Table
+    from rich.text import Text
+    from rich.columns import Columns
+    from rich.rule import Rule
+    console = Console()
+    from importlib.metadata import version as _ver
+    try:
+        v = _ver("avouch")
+    except Exception:
+        v = "0.3.4"
+    from rich.panel import Panel
+    metrics = Text()
+    metrics.append(f"{total_files}", style="bold")
+    metrics.append(" files", style=f"dim {_MUTED}")
+    metrics.append("  ·  ", style=f"dim {_BORDER}")
+    metrics.append(f"{warning_count}", style=f"bold {_ACCENT}" if warning_count else "dim")
+    metrics.append(" warn", style=f"dim {_MUTED}")
+    metrics.append("  ·  ", style=f"dim {_BORDER}")
+    metrics.append(f"{error_count}", style=f"bold {_ERROR}" if error_count else "dim")
+    metrics.append(" err", style=f"dim {_MUTED}")
+    if suppressed:
+        metrics.append(f"  ·  +{suppressed} suppressed", style=f"dim {_MUTED} italic")
+    metrics.justify = "center"
+    from rich import box
+    console.print(Panel(metrics, border_style="#6b6560", padding=(0,2), title=f"avouch {v}", title_align="left", expand=True, width=_LINE_WIDTH, box=box.SQUARE))
+
+
+
+    rule_counts = {}
+    rule_labels = {}
+    file_order = sorted(issues_by_file)
+    for file_name in file_order:
+        try:
+            source_lines = Path(file_name).read_text(encoding="utf-8").splitlines()
+        except (OSError, UnicodeDecodeError):
+            source_lines = []
+        console.print()
+        console.print(Text(file_name, style=f"bold {_MUTED}") + Text(f"  ·  {len(issues_by_file[file_name])} finding{'s' if len(issues_by_file[file_name])!=1 else ''}", style="dim"))
+        for item_name, rule_id, rule_name, metric, is_error, line, message in _issue_rows(issues_by_file[file_name]):
+            key = rule_id or rule_name
+            rule_counts[key] = rule_counts.get(key, 0) + 1
+            rule_labels[key] = rule_name
+            border = _ERROR if is_error else _ACCENT
+            loc = f"{file_name}:{line or 1}"
+            title = Text()
+            title.append(loc, style="bold")
+            title.append("  ")
+            if rule_id:
+                title.append(f" {rule_id} ", style=f"bold white on {border}")
+                title.append(" ", style="")
+            title.append(message, style=f"{_ERROR} bold" if is_error else "")
+            code = ""
+            caret_line = ""
+            if source_lines and line and 1 <= line <= len(source_lines):
+                head = max(line - 1, 1)
+                tail = min(line + 1, len(source_lines))
+                width = len(str(tail))
+                lines = []
+                for n in range(head, tail+1):
+                    prefix = f"{n:>{width}} │ "
+                    txt = source_lines[n-1]
+                    if n == line and item_name != "file":
+                        col = txt.find(item_name)
+                        if col != -1:
+                            caret = " " * (len(prefix) + col) + "^" * len(item_name)
+                            caret_line = caret
+                    lines.append(prefix + txt)
+                code = "\n".join(lines)
+                if caret_line:
+                    code += "\n" + " " * width + " │ " + caret_line.strip()
+            body = Text(message, style="") if not code else Text.from_markup(code, style=f"dim {_MUTED}") if False else None
+            if code:
+                panel_text = Text()
+                panel_text.append(message + "\n", style=f"{_ERROR}" if is_error else f"{_MUTED}")
+                panel_text.append(code, style=f"dim {_MUTED}")
+                if caret_line:
+                    pass
+                console.print(Panel(panel_text, title=title, title_align="left", border_style=border, padding=(0,1), expand=False))
+            else:
+                console.print(Panel(Text(message, style=f"{_ERROR}" if is_error else ""), title=title, title_align="left", border_style=border, padding=(0,1), expand=False))
+    if rule_counts:
+        console.print()
+        console.print(Rule(style=_BORDER))
+        t = Table(show_header=False, box=None, padding=(0,1))
+        t.add_column("rule", style=f"bold {_ACCENT}", justify="right", no_wrap=True)
+        t.add_column("name", style=f"dim {_MUTED}")
+        t.add_column("count", style="bold", justify="right")
+        ordered = sorted(rule_counts, key=lambda k: (-rule_counts[k], k))
+        for key in ordered:
+            label = rule_labels[key]
+            display = key if label==key else f"{key}  {label}" if key else label
+            # split for table: if key prefix exists, show as two cols
+            if key and label != key:
+                t.add_row(key, label, str(rule_counts[key]))
+            else:
+                t.add_row("", label, str(rule_counts[key]))
+        console.print(Text("BY RULE", style="bold dim"))
+        console.print(t)
+        if suppressed:
+            console.print(Text(f"  +{suppressed} suppressed by baseline", style=f"dim {_MUTED}"))
+    passing_files = [r["name"] for r in file_reports if r["name"] not in issues_by_file]
+    if passing_files:
+        console.print()
+        from rich.panel import Panel
+        from rich import box
+        t = Text()
+        for i, name in enumerate(passing_files[:18]):
+            if i:
+                t.append("  ·  ", style=f"dim {_MUTED}")
+            t.append(f"✓ {name}", style=f"dim {_SUCCESS}")
+        if len(passing_files) > 18:
+            t.append(f"  ·  +{len(passing_files)-18} more", style=f"dim {_MUTED}")
+        t.justify = "center"
+        console.print(Panel(t, border_style="#6b6560", padding=(0,2), title=f"passed  ·  {len(passing_files)}", title_align="left", expand=True, width=_LINE_WIDTH, box=box.SQUARE))
+    console.print()
+
+
+
+
+
+
 def render_report(function_reports, file_reports, class_reports, suppressed=0):
 
     _set_font()
@@ -557,10 +689,34 @@ def render_report(function_reports, file_reports, class_reports, suppressed=0):
 
     total_files = len(file_reports)
 
-    # Nothing to show
     if not issues_by_file:
+        if _USE_COLOR:
+            try:
+                from rich.console import Console
+                from rich.panel import Panel
+                from rich.text import Text
+                console = Console()
+                console.print()
+                body = Text()
+                body.append("◉  All clean.", style=f"bold {_SUCCESS}")
+                body.append(f"  —  {total_files} file{'s' if total_files!=1 else ''} passed", style=f"dim {_MUTED}")
+                if suppressed:
+                    body.append(f"  ·  +{suppressed} suppressed", style=f"dim {_MUTED}")
+                hint = Text("no findings in changed files  ·  commit or push with confidence", style=f"dim {_MUTED} italic")
+                console.print(Panel(Text.assemble(body, "\n", hint), border_style=_BORDER, padding=(1,2), title="[dim]avouch[/dim]", title_align="left", expand=False))
+                console.print()
+                return
+            except Exception:
+                pass
         print(_style("All clean.", _BOLD))
         return
+
+    if _USE_COLOR:
+        try:
+            _render_premium(issues_by_file, file_reports, error_count, warning_count, suppressed, total_files)
+            return
+        except Exception:
+            pass
 
     print(
         _style("AVOUCH", _BOLD)

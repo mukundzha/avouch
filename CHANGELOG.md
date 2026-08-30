@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 The format is inspired by Keep a Changelog.
 
+## [0.3.4] - 2026-08-30
+
+### Added
+- `avouch --watch`: poll `0.5s` (`AVOUCH_WATCH_INTERVAL`) and re-run on change. Snapshots `mtime+size` of reviewable files + `avouch.toml` + `.avouch/baseline.json`; clears screen on TTY and prints `⟳ HH:MM:SS — change detected: path`; `Ctrl+C` to quit. Works with `--all-files` / `--not-git` / `--staged` / `--changed`; incompatible with `--json` / `--format` / `--list-changed` / `--display` / `init` / `baseline` / `rule`.
+
+### Changed
+- Premium TUI redesign: header now full-width square `Panel` (`┌─ avouch 0.3.3 ─┐` with centered `3 files  ·  58 warn  ·  2 err` — numbers bold, labels dim, `·` warm gray, `warn` amber `#c48a3f`, `err` brick `#c45c4a`); findings as bordered Panels with pill ` SCR015 ` white-on-accent; `All clean` as centered Panel; `PASSED` as full-block Panel (`┌─ passed  ·  2 ─┐`); thin `─` dividers, editorial whitespace, single accent.
+- Docs: `README.md` and `utility/docs.py` document `--watch`, premium blocks, and bump `0.3.3` → `0.3.4`.
+
 ## [0.3.3] - 2026-08-23
 
 ### Added

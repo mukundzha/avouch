@@ -40,7 +40,7 @@ ERROR = 2
 try:
     AVOUCH_VERSION = importlib.metadata.version("avouch")
 except importlib.metadata.PackageNotFoundError:
-    AVOUCH_VERSION = "0.3.3"
+    AVOUCH_VERSION = "0.3.4"
 
 
 def _nothing_to_review_hint(args, candidate_files):
@@ -188,6 +188,182 @@ def _filter_changed_reports(functions, files, classes, line_ranges):
     )
 
 
+def _snapshot_files(file_paths):
+    snap = {}
+    for fp in file_paths:
+        try:
+            st = Path(fp).stat()
+            snap[fp] = (st.st_mtime_ns, st.st_size)
+        except OSError:
+            snap[fp] = None
+    try:
+        from avouch.config.loader import find_config_path
+        cfg = find_config_path()
+        if cfg is not None:
+            try:
+                st = cfg.stat()
+                snap[str(cfg)] = (st.st_mtime_ns, st.st_size)
+            except OSError:
+                pass
+    except Exception:
+        pass
+    try:
+        bf = Path(".avouch/baseline.json")
+        if bf.exists():
+            try:
+                st = bf.stat()
+                snap[str(bf)] = (st.st_mtime_ns, st.st_size)
+            except OSError:
+                pass
+    except Exception:
+        pass
+    return snap
+
+
+def _run_single_review(args, ignore_paths, selected_rules, ignored_rules):
+    try:
+        config = load_config()
+    except ValueError as exc:
+        print(f"error: invalid avouch.toml configuration: {exc}", file=sys.stderr)
+        print(f"hint: check the [limits], [rules], and ignore_paths sections ({exc})", file=sys.stderr)
+        return ERROR, [], "config error"
+    rules = config.get("rules", DEFAULT_RULES)
+    if args.select:
+        rules = {key: enabled and key in selected_rules for key, enabled in rules.items()}
+    for key in ignored_rules:
+        if key in rules:
+            rules[key] = False
+    limits = config.get("limits", DEFAULT_LIMITS)
+    cur_ignore = config.get("ignore_paths", []) + (args.ignore_path or [])
+    cur_ignore = list(dict.fromkeys(cur_ignore))
+    if not args.not_git and not is_gitrepo():
+        print("error: no Git repository found", file=sys.stderr)
+        print("hint: run Avouch from inside a Git repository, or use --not-git to review files without Git", file=sys.stderr)
+        return ERROR, [], "no git"
+    if args.not_git:
+        candidate_files = get_all_files_on_disk()
+    elif args.all_files:
+        candidate_files = get_all_files()
+    elif args.staged:
+        candidate_files = get_staged_files()
+    else:
+        candidate_files = get_changed_files()
+    reviewable_files = get_reviewable_files(candidate_files, cur_ignore)
+    if not reviewable_files:
+        vlog(args.verbose, f"candidate files: {len(candidate_files)}, reviewable: 0")
+        print("error: nothing to review", file=sys.stderr)
+        print(f"hint: {_nothing_to_review_hint(args, candidate_files)}", file=sys.stderr)
+        return ERROR, reviewable_files, "empty"
+    if args.fix:
+        fixed = 0
+        try:
+            for file_path in reviewable_files:
+                fixed += fix_bare_except(file_path)
+                fixed += fix_mutable_default_args(file_path)
+        except (OSError, UnicodeDecodeError, tokenize.TokenError) as exc:
+            print(f"error: could not apply fixes: {exc}", file=sys.stderr)
+            return ERROR, reviewable_files, "fix error"
+        if fixed:
+            vlog(args.verbose, f"fixed {fixed} bare except clause(s)")
+    if not args.not_git and not args.all_files and not args.changed:
+        ranges = get_changed_line_ranges(reviewable_files, staged=args.staged)
+    else:
+        ranges = None
+    cfg_label = config.get("_config_path") or "defaults (no avouch.toml)"
+    vlog(args.verbose, f"config: {cfg_label}, {len(cur_ignore)} ignore path(s)")
+    if args.verbose and cur_ignore:
+        vlog(True, f"ignore paths: {', '.join(cur_ignore)}")
+    file_reports = []
+    functions_reports = []
+    class_reports = []
+    workers = _worker_count(len(reviewable_files))
+    if workers == 1:
+        for file_path in reviewable_files:
+            vlog(args.verbose, f"analyzing {file_path}")
+            functions, files, classes = analyze_file(file_path, limits, rules)
+            functions_reports.extend(functions)
+            file_reports.extend(files)
+            class_reports.extend(classes)
+    else:
+        for file_path in reviewable_files:
+            vlog(args.verbose, f"analyzing {file_path}")
+        payloads = [(p, limits, rules) for p in reviewable_files]
+        with concurrent.futures.ProcessPoolExecutor(max_workers=workers) as ex:
+            for file_path, (functions, files, classes) in zip(reviewable_files, ex.map(_parallel_target, payloads)):
+                vlog(args.verbose, f"analyzed {file_path}: {len(functions)} functions, {len(classes)} classes, {files[0]['lines']} lines")
+                functions_reports.extend(functions)
+                file_reports.extend(files)
+                class_reports.extend(classes)
+    if ranges is not None:
+        functions_reports, file_reports, class_reports = _filter_changed_reports(functions_reports, file_reports, class_reports, ranges)
+    suppressed = 0
+    if not args.no_baseline:
+        try:
+            baseline_set = load_baseline()
+        except ValueError as exc:
+            print(f"error: invalid baseline: {exc}", file=sys.stderr)
+            return ERROR, reviewable_files, "baseline error"
+        if baseline_set is not None:
+            functions_reports, file_reports, class_reports, suppressed = filter_reports(functions_reports, file_reports, class_reports, baseline_set)
+            if args.verbose and suppressed:
+                vlog(True, f"suppressed {suppressed} finding(s) by baseline")
+    if not args.quiet:
+        if args.changed:
+            try:
+                render_diff_view(reviewable_files, functions_reports, file_reports, class_reports)
+            except Exception:
+                render_diff_view(reviewable_files)
+        else:
+            generate_report(functions_reports, file_reports, class_reports, suppressed)
+    reports = class_reports + functions_reports + file_reports
+    exit_code = VIOLATIONS_FOUND if any(report["issues"] for report in reports) else SUCCESS
+    vlog(args.verbose, f"exit code: {exit_code}")
+    return exit_code, reviewable_files, "ok"
+
+
+def _run_watch(args, ignore_paths, selected_rules, ignored_rules):
+    import time
+    interval = float(os.environ.get("AVOUCH_WATCH_INTERVAL", "0.5"))
+    if interval < 0.1:
+        interval = 0.1
+    mode = "all" if args.all_files or args.not_git else ("staged" if args.staged else "changed")
+    print(f"watching {mode} Python files \u00b7 interval {interval:.1f}s \u00b7 Ctrl+C to quit", file=sys.stderr)
+    _, watched_files, _ = _run_single_review(args, ignore_paths, selected_rules, ignored_rules)
+    prev_snap = _snapshot_files(watched_files)
+    try:
+        while True:
+            time.sleep(interval)
+            try:
+                nxt = get_all_files_on_disk() if args.not_git else (get_all_files() if args.all_files else get_changed_files())
+                cur_ignore = list(dict.fromkeys(load_config().get("ignore_paths", []) + (args.ignore_path or [])))
+                nxt_rev = get_reviewable_files(nxt, cur_ignore)
+                nxt_snap = _snapshot_files(nxt_rev)
+            except Exception:
+                continue
+            if nxt_snap == prev_snap and set(nxt_rev) == set(watched_files):
+                continue
+            if sys.stdout.isatty():
+                print("\033[2J\033[H", end="")
+            ts = time.strftime("%H:%M:%S")
+            diff = [k for k in set(list(nxt_snap.keys()) + list(prev_snap.keys())) if nxt_snap.get(k) != prev_snap.get(k)]
+            added = set(nxt_rev) - set(watched_files)
+            removed = set(watched_files) - set(nxt_rev)
+            if diff:
+                tag = ", ".join(diff[:2])
+            elif added:
+                tag = f"+{next(iter(added))}"
+            elif removed:
+                tag = f"-{next(iter(removed))}"
+            else:
+                tag = "file set changed"
+            print(f"\u27f3 {ts} \u2014 change detected: {tag}", file=sys.stderr)
+            _, watched_files, _ = _run_single_review(args, ignore_paths, selected_rules, ignored_rules)
+            prev_snap = _snapshot_files(watched_files)
+    except KeyboardInterrupt:
+        print("\nWatch stopped.", file=sys.stderr)
+        return SUCCESS
+
+
 def main(argv=None):
 
     verbose = "--verbose" in (argv if argv is not None else sys.argv[1:])
@@ -254,6 +430,11 @@ def _main(argv=None):
         action="store_true",
         help="replace safe bare except clauses with except Exception before reviewing",
     )
+    parser.add_argument(
+        "--watch",
+        action="store_true",
+        help="watch Python files and re-run on change (polling, Ctrl+C to quit)",
+    )
     selection = parser.add_mutually_exclusive_group()
     selection.add_argument(
         "--changed",
@@ -307,6 +488,26 @@ def _main(argv=None):
     if args.format and args.changed:
         print("error: --format cannot be combined with --changed", file=sys.stderr)
         print("hint: --changed is a diff view, not a findings format", file=sys.stderr)
+        return ERROR
+
+    if args.watch and (args.json or args.format):
+        print("error: --watch cannot be combined with --json or --format", file=sys.stderr)
+        print("hint: --watch is an interactive human view; use plain avouch for JSON/SARIF", file=sys.stderr)
+        return ERROR
+
+    if args.watch and args.list_changed:
+        print("error: --watch cannot be combined with --list-changed", file=sys.stderr)
+        print("hint: --list-changed prints once and exits", file=sys.stderr)
+        return ERROR
+
+    if args.watch and args.display:
+        print("error: --watch cannot be combined with --display", file=sys.stderr)
+        print("hint: --display shows one file with a pager", file=sys.stderr)
+        return ERROR
+
+    if args.watch and args.command in ("init", "baseline", "rule"):
+        print(f"error: --watch cannot be combined with '{args.command}'", file=sys.stderr)
+        print("hint: run the command without --watch", file=sys.stderr)
         return ERROR
 
     if args.docs:
@@ -390,6 +591,9 @@ def _main(argv=None):
         for file_path in reviewable_files:
             print(file_path)
         return SUCCESS
+
+    if args.watch:
+        return _run_watch(args, ignore_paths, selected_rules, ignored_rules)
 
     if args.not_git:
         candidate_files = get_all_files_on_disk()

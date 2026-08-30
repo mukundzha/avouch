@@ -71,7 +71,8 @@ Avouch takes no path argument — review set is Git-defined.
 ```bash
 avouch --help        # all flags
 avouch --docs        # full docs, no review (TTY browser or piped)
-avouch --version     # avouch 0.3.3
+avouch --version     # avouch 0.3.4
+avouch --watch       # watch and re-run on change
 ```
 
 ### Review scopes (mutually exclusive)
@@ -160,6 +161,8 @@ avouch --all-files --format sarif > results.sarif
 **`--verbose`** — Step-by-step to stderr: `config: <resolved-path>`, `review set:`, `analyzing`, `suppressed`, `findings:`.
 
 **`--fix`** — Apply safe fixes before reviewing. Currently replaces bare `except:` clauses with `except Exception:` and converts mutable literal/constructor defaults to `None` sentinel initialization. Combine with any review scope, including `--not-git`.
+
+**`--watch`** — Watch Python files and re-run on change (polling, `Ctrl+C` to quit). Polls `0.5s` (`AVOUCH_WATCH_INTERVAL=0.5`), snapshots `mtime+size` of reviewable files + `avouch.toml` + `.avouch/baseline.json`; clears screen on TTY and prints `⟳ HH:MM:SS — change detected: path`. Works with `--all-files` / `--not-git` / `--staged` / `--changed`; incompatible with `--json` / `--format` / `--list-changed` / `--display`. Premium TUI uses full-width block header (`┌─ avouch 0.3.4 ─┐`).
 
 **`--ignore-path`** — Repeatable, component-wise (`tests` skips `tests/` not `tests.py`). Combined with `ignore_paths` in `avouch.toml`.
 
@@ -351,7 +354,7 @@ jobs:
       #   with: {sarif_file: results.sarif}
 ```
 
-`checkout` provides PR code; `avouch --all-files --format github` annotates diff; `permissions: contents: read` is enough. Pin `avouch==0.3.3`.
+`checkout` provides PR code; `avouch --all-files --format github` annotates diff; `permissions: contents: read` is enough. Pin `avouch==0.3.4`.
 
 Why `--all-files`? Default is changed vs `HEAD` — fresh checkout is empty (`nothing to review`). `--changed`/`--staged` only make sense locally.
 
