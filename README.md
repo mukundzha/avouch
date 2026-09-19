@@ -160,7 +160,9 @@ avouch --all-files --format sarif > results.sarif
 
 **`--verbose`** — Step-by-step to stderr: `config: <resolved-path>`, `review set:`, `analyzing`, `suppressed`, `findings:`.
 
-**`--fix`** — Apply safe fixes before reviewing. Currently replaces bare `except:` clauses with `except Exception:` and converts mutable literal/constructor defaults to `None` sentinel initialization. Combine with any review scope, including `--not-git`.
+**`--fix`** — Apply safe fixes before reviewing. Fixes bare `except:` → `except Exception:`, mutable defaults → `None` sentinel, `async def` without `await` → `def`, and `shell=True` → `shell=False`. Use `--fix-dry-run` to preview. Combine with any review scope, including `--not-git`.
+
+**Inline suppression** — Suppress a line with `# avouch: ignore[SCR002]` or `# noqa: SCR002` (blanket `# avouch: ignore` / `# noqa` suppresses all on that line; `any` line inside the function counts). File-level: `# avouch: ignore-file[SCR014]` at top of file.
 
 **`--watch`** — Watch Python files and re-run on change (polling, `Ctrl+C` to quit). Polls `0.5s` (`AVOUCH_WATCH_INTERVAL=0.5`), snapshots `mtime+size` of reviewable files + `avouch.toml` + `.avouch/baseline.json`; clears screen on TTY and prints `⟳ HH:MM:SS — change detected: path`. Works with `--all-files` / `--not-git` / `--staged` / `--changed`; incompatible with `--json` / `--format` / `--list-changed` / `--display`. Premium TUI uses full-width block header (`┌─ avouch 0.3.4 ─┐`).
 

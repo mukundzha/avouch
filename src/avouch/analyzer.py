@@ -21,6 +21,7 @@ from avouch.rules.dynamic_code import analyze as analyze_dynamic_code
 
 import ast
 
+from avouch.utility.suppress import is_suppressed, parse_suppressions
 from avouch.utility.walk import reset_walk_cache
 
 
@@ -190,6 +191,24 @@ def _analyze_class(node, file_path, limits, rules):
     return report
 
 
+def _filter_issues(issues, line, file_suppress, line_suppress, end_line=None):
+    filtered = []
+    for issue in issues:
+        rule = issue.get("rule") or ""
+        if is_suppressed(rule, line, file_suppress, line_suppress):
+            continue
+        suppressed = False
+        if end_line and line_suppress:
+            for l in range(line, end_line + 1):
+                if is_suppressed(rule, l, None, line_suppress):
+                    suppressed = True
+                    break
+        if suppressed:
+            continue
+        filtered.append(issue)
+    return filtered
+
+
 def analyze_file(file_path, limits, rules):
 
     reset_walk_cache()
@@ -199,21 +218,35 @@ def analyze_file(file_path, limits, rules):
     if parsed is None:
         return ([], error_report, [])
 
+    file_suppress, line_suppress = parse_suppressions(source) if source else (None, {})
+
     funcs = []
     cls = []
 
     for node in ast.walk(parsed):
         if isinstance(node, ast.FunctionDef):
-            funcs.append(_analyze_func(node, file_path, limits, rules))
+            report = _analyze_func(node, file_path, limits, rules)
+            report["issues"] = _filter_issues(report["issues"], report["line"], file_suppress, line_suppress, report["line"] + report["lines"] - 1)
+            funcs.append(report)
         elif isinstance(node, ast.AsyncFunctionDef):
-            funcs.append(_analyze_async(node, file_path, limits, rules))
+            report = _analyze_async(node, file_path, limits, rules)
+            end = report["line"] + report["lines"] - 1
+            report["issues"] = _filter_issues(report["issues"], report["line"], file_suppress, line_suppress, end)
+            funcs.append(report)
         elif isinstance(node, ast.ClassDef):
-            cls.append(_analyze_class(node, file_path, limits, rules))
+            report = _analyze_class(node, file_path, limits, rules)
+            report["issues"] = _filter_issues(report["issues"], report["line"], file_suppress, line_suppress, report["line"] + report["lines"] - 1)
+            cls.append(report)
 
     file_issues = []
 
     if rules["max_file_lines"]:
         file_issues = analyze_max_file_lines(source, limits)
+        file_issues = _filter_issues(file_issues, None, file_suppress, line_suppress)
+        if file_suppress is not None and (file_suppress is None or not file_suppress):
+            file_issues = []
+        elif file_suppress:
+            file_issues = [i for i in file_issues if i.get("rule") not in file_suppress]
 
     return (
         funcs,

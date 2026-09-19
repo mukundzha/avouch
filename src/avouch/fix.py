@@ -1,5 +1,6 @@
 import io
 import ast
+import re
 import tokenize
 from pathlib import Path
 
@@ -135,3 +136,76 @@ def fix_mutable_default_args(file_path):
         source = source[:start] + replacement + source[end:]
     path.write_text(source, encoding="utf-8")
     return sum(1 for start, end, replacement in edits if replacement == "None")
+
+
+def fix_async_without_await(file_path):
+    path = Path(file_path)
+    source = path.read_text(encoding="utf-8")
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        return 0
+    offsets = _line_offsets(source)
+    edits = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.AsyncFunctionDef):
+            continue
+        has_await = any(isinstance(n, ast.Await) for n in ast.walk(node))
+        if has_await:
+            continue
+        start = _position_offset(source, offsets, (node.lineno, node.col_offset))
+        segment = source[start : start + 20]
+        m = re.match(r"async\s+", segment)
+        if m:
+            edits.append((start, start + m.end(), ""))
+        else:
+            try:
+                tokens = list(tokenize.generate_tokens(io.StringIO(source).readline))
+                for tok in tokens:
+                    if tok.start[0] == node.lineno and tok.string == "async":
+                        nxt = tokens[tokens.index(tok) + 1] if tokens.index(tok) + 1 < len(tokens) else None
+                        if nxt and nxt.type == tokenize.NAME and nxt.string == "def":
+                            s = _position_offset(source, offsets, tok.start)
+                            e = _position_offset(source, offsets, nxt.start)
+                            edits.append((s, e, "def "))
+                            break
+            except tokenize.TokenError:
+                continue
+    if not edits:
+        return 0
+    for s, e, r in sorted(edits, reverse=True):
+        source = source[:s] + r + source[e:]
+        source = source.replace("async  def", "def", 1) if "async  def" in source else source
+    Path(file_path).write_text(source, encoding="utf-8")
+    return len(edits)
+
+
+def fix_shell_true(file_path):
+    path = Path(file_path)
+    source = path.read_text(encoding="utf-8")
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        return 0
+    offsets = _line_offsets(source)
+    edits = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        if not (isinstance(node.func, ast.Attribute) and isinstance(node.func.value, ast.Name) and node.func.value.id == "subprocess" and node.func.attr in {"run", "call", "check_call", "check_output", "Popen"}):
+            continue
+        for kw in node.keywords:
+            if kw.arg == "shell" and isinstance(kw.value, ast.Constant) and kw.value.value is True:
+                s = _position_offset(source, offsets, (kw.value.lineno, kw.value.col_offset))
+                e = _position_offset(source, offsets, (kw.value.end_lineno, kw.value.end_col_offset))
+                edits.append((s, e, "False"))
+    if not edits:
+        return 0
+    for s, e, r in sorted(edits, reverse=True):
+        source = source[:s] + r + source[e:]
+    Path(file_path).write_text(source, encoding="utf-8")
+    return len(edits)
+
+
+def fix_all(file_path):
+    return fix_bare_except(file_path) + fix_mutable_default_args(file_path) + fix_async_without_await(file_path) + fix_shell_true(file_path)

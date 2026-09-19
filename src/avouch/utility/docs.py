@@ -375,14 +375,23 @@ not by the command line.
     avouch --version     version
     avouch --verbose     details on stderr
     avouch --quiet       no report; exit code only
-    avouch --watch       watch and re-run on change (polling, Ctrl+C)
-    avouch --changed     diff view of changed files
-    avouch --staged      staged only
-    avouch --all-files   every eligible file
-    avouch --not-git     walk CWD; no Git needed
-    avouch baseline      snapshot findings to .avouch/baseline.json
-    avouch --no-baseline ignore baseline
-    avouch rule SCR002   show one rule (or list all with no arg)
+     avouch --watch       watch and re-run on change (polling, Ctrl+C)
+     avouch --changed     diff view of changed files
+     avouch --staged      staged only
+     avouch --all-files   every eligible file
+     avouch --not-git     walk CWD; no Git needed
+     avouch --fix         auto-fix safe violations (bare except, mutable defaults, async without await, shell=True)
+     avouch --fix-dry-run preview fixes as diff
+     avouch baseline      snapshot findings to .avouch/baseline.json
+     avouch --no-baseline ignore baseline
+     avouch rule SCR002   show one rule (or list all with no arg)
+
+Inline suppression (per-line/file, no config change):
+
+     def f(a,b,c,d,e,f):  # avouch: ignore[SCR014]
+     except:  # avouch: ignore[SCR002]  or  # noqa: SCR002
+     x = eval(v)  # noqa: SCR020
+     # avouch: ignore-file  or  # avouch: ignore-file[SCR003]  (top of file)
 
 Only one of --changed/--staged/--all-files; --json/--verbose/--quiet/--watch combine with any scope;
 --not-git conflicts with --changed/--staged; --watch conflicts with --json/--format/--list-changed/--display.

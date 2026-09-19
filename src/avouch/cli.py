@@ -31,7 +31,7 @@ from avouch.git import (
 )
 from avouch.utility.measure import measure_maxima
 from avouch.baseline import load_baseline, filter_reports, write_baseline
-from avouch.fix import fix_bare_except, fix_mutable_default_args
+from avouch.fix import fix_all, fix_async_without_await, fix_bare_except, fix_mutable_default_args, fix_shell_true
 
 SUCCESS = 0
 VIOLATIONS_FOUND = 1
@@ -254,17 +254,38 @@ def _run_single_review(args, ignore_paths, selected_rules, ignored_rules):
         print("error: nothing to review", file=sys.stderr)
         print(f"hint: {_nothing_to_review_hint(args, candidate_files)}", file=sys.stderr)
         return ERROR, reviewable_files, "empty"
-    if args.fix:
+    if args.fix or args.fix_dry_run:
         fixed = 0
         try:
             for file_path in reviewable_files:
-                fixed += fix_bare_except(file_path)
-                fixed += fix_mutable_default_args(file_path)
+                if args.fix_dry_run:
+                    import tempfile, shutil
+                    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".py")
+                    tmp.close()
+                    shutil.copy(file_path, tmp.name)
+                    c = fix_all(tmp.name)
+                    if c:
+                        import pathlib
+                        orig = Path(file_path).read_text(encoding="utf-8")
+                        new = Path(tmp.name).read_text(encoding="utf-8")
+                        import difflib
+                        diff = difflib.unified_diff(orig.splitlines(), new.splitlines(), fromfile=file_path, tofile=file_path, lineterm="")
+                        print("\n".join(diff))
+                    Path(tmp.name).unlink(missing_ok=True)
+                    fixed += c
+                else:
+                    c1 = fix_bare_except(file_path)
+                    c2 = fix_mutable_default_args(file_path)
+                    c3 = fix_async_without_await(file_path)
+                    c4 = fix_shell_true(file_path)
+                    fixed += c1 + c2 + c3 + c4
         except (OSError, UnicodeDecodeError, tokenize.TokenError) as exc:
             print(f"error: could not apply fixes: {exc}", file=sys.stderr)
             return ERROR, reviewable_files, "fix error"
         if fixed:
-            vlog(args.verbose, f"fixed {fixed} bare except clause(s)")
+            vlog(args.verbose, f"fixed {fixed} issue(s)")
+            if args.fix_dry_run:
+                return SUCCESS, reviewable_files, "dry-run"
     if not args.not_git and not args.all_files and not args.changed:
         ranges = get_changed_line_ranges(reviewable_files, staged=args.staged)
     else:
@@ -428,7 +449,12 @@ def _main(argv=None):
     parser.add_argument(
         "--fix",
         action="store_true",
-        help="replace safe bare except clauses with except Exception before reviewing",
+        help="apply safe auto-fixes (bare except, mutable defaults, async without await, shell=True) before reviewing",
+    )
+    parser.add_argument(
+        "--fix-dry-run",
+        action="store_true",
+        help="show what --fix would change without writing files",
     )
     parser.add_argument(
         "--watch",
@@ -612,17 +638,35 @@ def _main(argv=None):
         print(f"hint: {_nothing_to_review_hint(args, candidate_files)}", file=sys.stderr)
         return ERROR
 
-    if args.fix:
+    if args.fix or args.fix_dry_run:
         fixed = 0
         try:
             for file_path in reviewable_files:
-                fixed += fix_bare_except(file_path)
-                fixed += fix_mutable_default_args(file_path)
+                if args.fix_dry_run:
+                    import tempfile, shutil, difflib, pathlib
+                    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".py")
+                    tmp.close()
+                    shutil.copy(file_path, tmp.name)
+                    c = fix_all(tmp.name)
+                    if c:
+                        orig = pathlib.Path(file_path).read_text(encoding="utf-8")
+                        new = pathlib.Path(tmp.name).read_text(encoding="utf-8")
+                        diff = difflib.unified_diff(orig.splitlines(), new.splitlines(), fromfile=file_path, tofile=file_path, lineterm="")
+                        print("\n".join(diff))
+                    pathlib.Path(tmp.name).unlink(missing_ok=True)
+                    fixed += c
+                else:
+                    fixed += fix_bare_except(file_path)
+                    fixed += fix_mutable_default_args(file_path)
+                    fixed += fix_async_without_await(file_path)
+                    fixed += fix_shell_true(file_path)
         except (OSError, UnicodeDecodeError, tokenize.TokenError) as exc:
             print(f"error: could not apply fixes: {exc}", file=sys.stderr)
             return ERROR
         if fixed:
-            vlog(args.verbose, f"fixed {fixed} bare except clause(s)")
+            vlog(args.verbose, f"fixed {fixed} issue(s)")
+            if args.fix_dry_run:
+                return SUCCESS
 
     if not args.not_git and not args.all_files and not args.changed:
         ranges = get_changed_line_ranges(reviewable_files, staged=args.staged)
